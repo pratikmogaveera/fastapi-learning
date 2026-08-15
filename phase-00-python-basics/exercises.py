@@ -19,12 +19,12 @@
 # Hello Pratik, age 26
 # Hello Pratik, age 26, email: pratik@example.com
 
-from typing import Optional
+from typing import TypedDict
 
-def greet(name, age, email=None):  # add type hints here
-    if email:
-        return f"Hello {name}, age {age}, email: {email}"
-    return f"Hello {name}, age {age}"
+def greet(name: str, age: int, email: str | None = None) -> str:  # add type hints here
+  if email:
+    return f"Hello {name}, age {age}, email: {email}"
+  return f"Hello {name}, age {age}"
 
 print(greet("Pratik", 26))
 print(greet("Pratik", 26, "pratik@example.com"))
@@ -45,6 +45,27 @@ print(greet("Pratik", 26, "pratik@example.com"))
 # {'short_code': 'abc123', 'original_url': 'https://google.com', 'click_count': 3}
 
 # TODO: define class Link here
+
+class LinkClass(TypedDict):
+  short_code: str
+  original_url: str
+  click_count: int
+
+class Link:
+  def __init__(self, short_code: str, original_url: str, click_count: int = 0) -> None:
+    self.short_code = short_code
+    self.original_url = original_url
+    self.click_count = click_count
+
+  def increment_clicks(self):
+    self.click_count += 1
+
+  def to_dict(self) -> LinkClass:
+    return {
+      'short_code': self.short_code,
+      'original_url': self.original_url,
+      'click_count': self.click_count
+    }        
 
 link = Link("abc123", "https://google.com")
 print(link.to_dict())
@@ -78,8 +99,23 @@ print(link.to_dict())
 #     return wrapper
 
 # TODO: implement log_call decorator
+def log_call(func):
+
+  def wrapper(*args, **kwargs):
+    print(f"Calling: {func.__name__}")
+    result = func(*args, **kwargs)
+    print(f"Done: {func.__name__}")
+    return result
+  return wrapper
 
 # TODO: apply decorator to get_user and call it
+@log_call
+def get_user() -> dict:
+  return {
+    'id': 1,
+    'name': "Pratik"
+  }
+
 result = get_user()
 print(result)
 
@@ -109,6 +145,17 @@ import asyncio
 
 # TODO: implement fetch_link and main
 
+async def fetch_link(short_code: str) -> dict:
+  await asyncio.sleep(0.1)
+  return { "short_code": short_code, "url": "https://example.com" }
+
+async def main() -> None:
+  response = await fetch_link("abc123")
+  print(response)
+
+
+asyncio.run(main())
+
 
 # ─────────────────────────────────────────────
 # EXERCISE 5 — *args and **kwargs
@@ -128,7 +175,11 @@ import asyncio
 # company: MO
 
 # TODO: implement describe
+def describe(**kwargs):
+  for key in kwargs:
+    print(f"{key}: {kwargs[key]}")
 
+describe(name="Pratik", role="SDE1", company="MO")
 
 # ─────────────────────────────────────────────
 # EXERCISE 6 — List and Dict comprehensions
@@ -148,5 +199,7 @@ links = [
 ]
 
 # TODO: Task A — list comprehension
+print([link['short_code'] for link in links if link['is_active']])
 
 # TODO: Task B — dict comprehension
+print({link['short_code']: link['original_url'] for link in links if link['is_active']})
