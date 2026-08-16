@@ -53,8 +53,8 @@ fastapi-learning/
 
 ## Progress
 
-- [ ] Phase 0 — Python Basics for FastAPI
-- [ ] Phase 1 — Routing & Request Handling
+- [x] Phase 0 — Python Basics for FastAPI
+- [x] Phase 1 — Routing & Request Handling
 - [ ] Phase 2 — Pydantic Models & Validation
 - [ ] Phase 3 — Dependency Injection
 - [ ] Phase 4 — Async Database (SQLAlchemy + Alembic)
