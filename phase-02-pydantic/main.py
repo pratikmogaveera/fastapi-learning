@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from pydantic import AnyHttpUrl, BaseModel, EmailStr, Field, model_validator
 
 app = FastAPI()
 
@@ -10,8 +11,25 @@ app = FastAPI()
 # Create POST /links that accepts CreateLinkRequest body and returns a fake LinkResponse
 # (hardcode the response for now, no DB)
 
-# TODO: implement here
 
+class CreateLinkRequestBasic(BaseModel):
+  original_url: str
+  custom_slug: str | None = None
+
+
+class LinkResponseBasic(BaseModel):
+  id: int
+  short_code: str
+  original_url: str
+
+
+@app.post('/links-basic', response_model=LinkResponseBasic)
+async def createLinksBasic(payload: CreateLinkRequestBasic):
+  return {
+    'id': 1,
+    'short_code': 'xna6',
+    'original_url': payload.original_url
+  }
 
 # EXERCISE 2 — Field validation
 # Add the following validation to CreateLinkRequest:
@@ -21,8 +39,6 @@ app = FastAPI()
 # Test: POST with original_url="not-a-url" → 422 with clear error
 # Test: POST with custom_slug="ab" → 422 (too short)
 
-# TODO: update your model here
-
 
 # EXERCISE 3 — model_validator (cross-field validation)
 # Add a model_validator to CreateLinkRequest that:
@@ -31,7 +47,35 @@ app = FastAPI()
 #
 # Hint: use @model_validator(mode='after') from pydantic
 
-# TODO: implement here
+
+class CreateLinkRequest(BaseModel):
+  # Ex 2 — AnyHttpUrl validates the URL format
+  original_url: AnyHttpUrl
+  # Ex 2 — Field constraints: 3-20 chars, alphanumeric + hyphens only
+  custom_slug: str | None = Field(default=None, min_length=3, max_length=20, pattern='^[-a-z0-9]+$')
+
+  # Ex 3 — cross-field validation: slug must not contain "admin"
+  @model_validator(mode="after")
+  def verify_slug(self):
+    if self.custom_slug and "admin" in self.custom_slug:
+      raise ValueError("Slug must not contain 'admin'.")
+    return self
+
+
+class LinkResponse(BaseModel):
+  id: int
+  short_code: str
+  original_url: AnyHttpUrl
+
+
+@app.post('/links', response_model=LinkResponse)
+async def createLinks(payload: CreateLinkRequest):
+  return {
+      'id': 1,
+      'short_code': 'xna6',
+      'original_url': payload.original_url
+
+    }
 
 
 # EXERCISE 4 — Nested models
@@ -40,4 +84,24 @@ app = FastAPI()
 # Create POST /users that accepts it and echoes it back
 # Test with nested JSON body
 
-# TODO: implement here
+class Address(BaseModel):
+  street: str
+  city: str
+  country: str
+
+
+class CreateUserRequest(BaseModel):
+  name: str
+  email: EmailStr
+  address: Address
+
+
+class CreateUserResponse(BaseModel):
+  name: str
+  email: EmailStr
+  address: Address
+
+
+@app.post('/user', response_model=CreateUserResponse)
+async def createUser(payload: CreateUserRequest):
+  return payload
