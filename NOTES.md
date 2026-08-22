@@ -32,3 +32,31 @@ Concepts, Q&A, and key takeaways. Append after completing each phase. Don't reor
 ## Q&A
 
 _Add questions and answers as they come up during learning._
+
+---
+
+## 2. Pydantic Models & Validation
+
+### Key Concepts
+
+- Separate request and response models — request models validate incoming data, response models shape outgoing data. Don't mix concerns.
+- `AnyHttpUrl` is a Pydantic type that validates URL format automatically. Returns a URL object, not a plain `str` — wrap in `str()` if you need string operations.
+- `Field()` adds constraints to a field: `min_length`, `max_length`, `pattern` (regex), `gt`, `lt`, etc.
+- Optional fields with constraints: `field: str | None = Field(default=None, min_length=3)` — constraints only run when value is not `None`.
+- Regex patterns in `Field(pattern=...)` must be anchored (`^...$`) to match the full value, not just a substring.
+- `@model_validator(mode="after")` runs after all fields are validated. `self` gives access to all field values. Must return `self`.
+- Nested models: declare a `BaseModel` as the type of another model's field. FastAPI handles nested JSON automatically.
+- `EmailStr` from Pydantic validates email format. Requires `pip install pydantic[email]`.
+- Response models don't need validation constraints — those belong on request models only.
+- `return payload` in a route handler works when the return type matches `response_model` — FastAPI serializes the Pydantic object directly.
+
+### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `AnyHttpUrl` | Pydantic type that validates HTTP/HTTPS URLs |
+| `EmailStr` | Pydantic type that validates email format |
+| `Field(min_length, max_length, pattern)` | Adds constraints to a single field |
+| `@model_validator(mode="after")` | Cross-field validation after all fields are validated |
+| `raise ValueError(...)` inside validator | Pydantic converts this to a 422 response automatically |
+| Nested `BaseModel` as field type | Enables nested JSON body parsing |
