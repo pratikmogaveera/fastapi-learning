@@ -60,3 +60,28 @@ _Add questions and answers as they come up during learning._
 | `@model_validator(mode="after")` | Cross-field validation after all fields are validated |
 | `raise ValueError(...)` inside validator | Pydantic converts this to a 422 response automatically |
 | Nested `BaseModel` as field type | Enables nested JSON body parsing |
+
+---
+
+## 3. Dependency Injection
+
+### Key Concepts
+
+- `Depends(fn)` tells FastAPI to call `fn` before the route handler and inject the result. The route function declares *what it needs*, not how to get it.
+- Dependencies are plain functions — no special class or decorator needed.
+- `yield` dependencies split into setup (before yield) and teardown (after yield). Teardown runs after the response is sent. Used for DB sessions, file handles, etc.
+- `Annotated[Type, Depends(fn)]` is the modern style — define a type alias once, reuse across multiple routes. Cleaner than repeating `= Depends(fn)` in every signature.
+- Dependencies can depend on other dependencies — FastAPI builds the full graph and resolves it automatically.
+- Use `HTTPException(status_code)` inside dependencies to return HTTP errors. `raise ValueError` produces a 500, not a 4xx.
+- Return typed Pydantic model instances from dependencies instead of plain dicts — consumers get typed objects with known fields, not opaque dicts.
+- `Header(...)` with ellipsis makes a header required — FastAPI returns 422 before your code runs if it's missing. `Header()` without ellipsis makes it optional (defaults to `None`).
+
+### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `Depends(fn)` | Declares a dependency — FastAPI calls `fn` and injects the result |
+| `yield` in a dependency | Splits dependency into setup + teardown around the request lifecycle |
+| `Annotated[T, Depends(fn)]` | Modern type alias pattern for reusable dependencies |
+| `HTTPException(status_code)` | Raises an HTTP error from a dependency or route |
+| `Header(...)` | Reads a required request header; `...` makes it required |
