@@ -13,23 +13,23 @@ app = FastAPI()
 
 
 class CreateLinkRequestBasic(BaseModel):
-  original_url: str
-  custom_slug: str | None = None
+    original_url: str
+    custom_slug: str | None = None
 
 
 class LinkResponseBasic(BaseModel):
-  id: int
-  short_code: str
-  original_url: str
+    id: int
+    short_code: str
+    original_url: str
 
 
-@app.post('/links-basic', response_model=LinkResponseBasic)
-async def createLinksBasic(payload: CreateLinkRequestBasic):
-  return {
-    'id': 1,
-    'short_code': 'xna6',
-    'original_url': payload.original_url
-  }
+@app.post("/links-basic", response_model=LinkResponseBasic)
+async def create_links_basic(payload: CreateLinkRequestBasic):
+    return {
+        "id": 1,
+        "short_code": "xna6",
+        "original_url": payload.original_url
+    }
 
 # EXERCISE 2 — Field validation
 # Add the following validation to CreateLinkRequest:
@@ -49,32 +49,31 @@ async def createLinksBasic(payload: CreateLinkRequestBasic):
 
 
 class CreateLinkRequest(BaseModel):
-  # Ex 2 — AnyHttpUrl validates the URL format
-  original_url: AnyHttpUrl
-  # Ex 2 — Field constraints: 3-20 chars, alphanumeric + hyphens only
-  custom_slug: str | None = Field(default=None, min_length=3, max_length=20, pattern='^[-a-z0-9]+$')
+    # Ex 2 — AnyHttpUrl validates the URL format
+    original_url: AnyHttpUrl
+    # Ex 2 — Field constraints: 3-20 chars, alphanumeric + hyphens only
+    custom_slug: str | None = Field(default=None, min_length=3, max_length=20, pattern="^[-a-z0-9]+$")
 
-  # Ex 3 — cross-field validation: slug must not contain "admin"
-  @model_validator(mode="after")
-  def verify_slug(self):
-    if self.custom_slug and "admin" in self.custom_slug:
-      raise ValueError("Slug must not contain 'admin'.")
-    return self
+    # Ex 3 — cross-field validation: slug must not contain "admin"
+    @model_validator(mode="after")
+    def verify_slug(self):
+        if self.custom_slug and "admin" in self.custom_slug:
+            raise ValueError("Slug must not contain 'admin'.")
+        return self
 
 
 class LinkResponse(BaseModel):
-  id: int
-  short_code: str
-  original_url: AnyHttpUrl
+    id: int
+    short_code: str
+    original_url: AnyHttpUrl
 
 
-@app.post('/links', response_model=LinkResponse)
-async def createLinks(payload: CreateLinkRequest):
-  return {
-      'id': 1,
-      'short_code': 'xna6',
-      'original_url': payload.original_url
-
+@app.post("/links", response_model=LinkResponse)
+async def create_links(payload: CreateLinkRequest):
+    return {
+        "id": 1,
+        "short_code": "xna6",
+        "original_url": payload.original_url
     }
 
 
@@ -85,23 +84,23 @@ async def createLinks(payload: CreateLinkRequest):
 # Test with nested JSON body
 
 class Address(BaseModel):
-  street: str
-  city: str
-  country: str
+    street: str
+    city: str
+    country: str
 
 
 class CreateUserRequest(BaseModel):
-  name: str
-  email: EmailStr
-  address: Address
+    name: str
+    email: EmailStr
+    address: Address
 
 
 class CreateUserResponse(BaseModel):
-  name: str
-  email: EmailStr
-  address: Address
+    name: str
+    email: EmailStr
+    address: Address
 
 
-@app.post('/user', response_model=CreateUserResponse)
-async def createUser(payload: CreateUserRequest):
-  return payload
+@app.post("/user", response_model=CreateUserResponse)
+async def create_user(payload: CreateUserRequest):
+    return payload

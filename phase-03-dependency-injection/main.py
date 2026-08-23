@@ -14,15 +14,15 @@ app = FastAPI()
 
 
 def get_request_id() -> uuid.UUID:
-  return uuid.uuid4()
+    return uuid.uuid4()
 
 
-@app.get('/ping',)
+@app.get("/ping")
 async def ping(id=Depends(get_request_id)):
-  return {
-    'request_id': id,
-    'status': "ok"
-  }
+    return {
+        "request_id": id,
+        "status": "ok"
+    }
 
 # EXERCISE 2 — Auth dependency
 # Create a dependency `get_current_user(authorization: str = Header(...))` that:
@@ -36,20 +36,20 @@ async def ping(id=Depends(get_request_id)):
 
 
 class User(BaseModel):
-  id: int
-  name: str
+    id: int
+    name: str
 
 
 def get_current_user(authorization: str = Header(...)) -> User:
-  if authorization == "Bearer secret-token":
-    return User(id=1, name="Pratik")
-  else:
-    raise HTTPException(401)
+    if authorization == "Bearer secret-token":
+        return User(id=1, name="Pratik")
+    else:
+        raise HTTPException(401)
 
 
-@app.get('/me', response_model=User)
+@app.get("/me", response_model=User)
 async def whoami(user=Depends(get_current_user)):
-  return user
+    return user
 
 
 # EXERCISE 3 — Shared dependency with Annotated
@@ -60,19 +60,19 @@ async def whoami(user=Depends(get_current_user)):
 
 
 class DashboardResponse(BaseModel):
-  id: int
-  total_amount: int
+    id: int
+    total_amount: int
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-@app.get('/dashboard', response_model=DashboardResponse)
+@app.get("/dashboard", response_model=DashboardResponse)
 async def dashboard(user: CurrentUser):
-  return {
-    'id': user.id,
-    'total_amount': 100
-  }
+    return {
+        "id": user.id,
+        "total_amount": 100
+    }
 
 
 # EXERCISE 4 — Yield dependency (simulating DB session)
@@ -86,17 +86,17 @@ async def dashboard(user: CurrentUser):
 
 
 def get_db():
-  print("DB: Connection opened.")
-  yield {"session": "active"}
-  print("DB: Connection closed.")
+    print("DB: Connection opened.")
+    yield {"session": "active"}
+    print("DB: Connection closed.")
 
 
 DBConn = Annotated[dict, Depends(get_db)]
 
 
-@app.get('/data')
+@app.get("/data")
 async def get_data(connection: DBConn):
-  return {
-    "total_amount": 100,
-    "total_users": 5
-  }
+    return {
+        "total_amount": 100,
+        "total_users": 5
+    }
