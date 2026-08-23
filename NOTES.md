@@ -1,6 +1,6 @@
 # FastAPI Learning — Notes
 
-Concepts, Q&A, and key takeaways. Append after completing each phase. Don't reorganize.
+Concepts, Q&A, and key takeaways. Append after completing each phase. Don't  reorganize.
 
 ---
 
