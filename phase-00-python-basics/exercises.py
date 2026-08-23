@@ -147,7 +147,7 @@ print(result)
 # Expected output:
 # {'short_code': 'abc123', 'url': 'https://example.com'}
 
-import asyncio  # noqa: E402
+import asyncio
 
 # TODO: implement fetch_link and main
 

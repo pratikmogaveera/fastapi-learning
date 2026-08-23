@@ -11,6 +11,9 @@ select = [
     "UP",  # pyupgrade (modern Python syntax)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"phase-*/exercises.py" = ["E402"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
