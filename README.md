@@ -18,7 +18,7 @@ Learn FastAPI concepts hands-on through small, focused exercises. Each phase map
 
 ## How to Run
 
-> **Want a clean start?** Switch to the [ `clean/starter` ](https://github.com/pratikmogaveera/fastapi-learning/tree/clean/starter) branch — it has all phases set up with TODOs and no solutions.
+> **Want a clean start?** Switch to the [  `clean/starter`  ](https://github.com/pratikmogaveera/fastapi-learning/tree/clean/starter) branch — it has all phases set up with TODOs and no solutions.
 
 ```bash
 # Install uv (if not installed)
