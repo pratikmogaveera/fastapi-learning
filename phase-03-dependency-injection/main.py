@@ -19,10 +19,8 @@ def get_request_id() -> uuid.UUID:
 
 @app.get("/ping")
 async def ping(id=Depends(get_request_id)):
-    return {
-        "request_id": id,
-        "status": "ok"
-    }
+    return {"request_id": id, "status": "ok"}
+
 
 # EXERCISE 2 — Auth dependency
 # Create a dependency `get_current_user(authorization: str = Header(...))` that:
@@ -69,10 +67,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 @app.get("/dashboard", response_model=DashboardResponse)
 async def dashboard(user: CurrentUser):
-    return {
-        "id": user.id,
-        "total_amount": 100
-    }
+    return {"id": user.id, "total_amount": 100}
 
 
 # EXERCISE 4 — Yield dependency (simulating DB session)
@@ -96,7 +91,4 @@ DBConn = Annotated[dict, Depends(get_db)]
 
 @app.get("/data")
 async def get_data(connection: DBConn):
-    return {
-        "total_amount": 100,
-        "total_users": 5
-    }
+    return {"total_amount": 100, "total_users": 5}
