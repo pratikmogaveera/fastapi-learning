@@ -59,7 +59,7 @@ fastapi-learning/
 - [x] Phase 1 — Routing & Request Handling
 - [x] Phase 2 — Pydantic Models & Validation
 - [x] Phase 3 — Dependency Injection
-- [ ] Phase 4 — Async Database (SQLAlchemy + Alembic)
+- [x] Phase 4 — Async Database (SQLAlchemy + Alembic)
 - [ ] Phase 5 — Authentication (JWT)
 - [ ] Phase 6 — Background Tasks & Workers
 - [ ] Phase 7 — Middleware

@@ -85,3 +85,43 @@ _Add questions and answers as they come up during learning._
 | `Annotated[T, Depends(fn)]` | Modern type alias pattern for reusable dependencies |
 | `HTTPException(status_code)` | Raises an HTTP error from a dependency or route |
 | `Header(...)` | Reads a required request header; `...` makes it required |
+
+---
+
+## 4. Async Database (SQLAlchemy + Alembic)
+
+### Key Concepts
+
+- `create_async_engine` creates the connection pool once at module level — never inside a request handler or dependency.
+- `async_sessionmaker` is a session factory. Call it to get an `AsyncSession` per request.
+- `expire_on_commit=False` — prevents SQLAlchemy from expiring ORM object attributes after commit, which would trigger extra DB queries in an async context.
+- `get_db()` yield dependency opens a session, yields it to the route, session closes automatically via `async with`.
+- ORM models use SQLAlchemy 2.0 style: `Mapped[type]` for column type annotations, `mapped_column()` for column config. `Mapped[str]` = NOT NULL, `Mapped[str | None]` = nullable.
+- `__tablename__` is required on every ORM model — tells SQLAlchemy which table it maps to.
+- `server_default=func.now()` — delegates timestamp default to the DB's `NOW()`. Don't use `default=datetime.utcnow` for server-side defaults.
+- SQLAlchemy 2.0 query style: `select(Model).where(...)`, then `await session.execute(query)`.
+- `.scalars().all()` — returns a list of ORM objects. `.scalar_one_or_none()` — returns a single object or `None`.
+- After `session.add()` and `await session.commit()`, call `await session.refresh(obj)` to reload DB-generated fields (`id`, `created_at`) back into the object.
+- `ConfigDict(from_attributes=True)` on a Pydantic model allows it to read from ORM object attributes instead of dicts. Required when returning ORM objects from routes with `response_model=`.
+- Alembic manages schema migrations. `alembic revision --autogenerate` detects model changes. `alembic upgrade head` applies them.
+- Alembic's `env.py` needs to be configured for async: use `async_engine_from_config` + `run_sync()` pattern. Import all ORM models before `target_metadata` so autogenerate can detect them.
+- `asyncpg` requires `greenlet` as a dependency — install it explicitly.
+
+### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `create_async_engine(url, echo=True)` | Creates async connection pool; `echo=True` logs SQL |
+| `async_sessionmaker(bind, class_, expire_on_commit)` | Session factory for creating `AsyncSession` instances |
+| `AsyncSession` | Async unit of work — run queries, commit, rollback |
+| `DeclarativeBase` | Base class for ORM models |
+| `AsyncAttrs` | Mixin that makes ORM relationship loading async-compatible |
+| `Mapped[T]` + `mapped_column()` | SQLAlchemy 2.0 column declaration style |
+| `server_default=func.now()` | DB-side default for timestamp columns |
+| `select(Model).where(...)` | SQLAlchemy 2.0 query style |
+| `.scalar_one_or_none()` | Returns single result or None — use for ID lookups |
+| `await session.refresh(obj)` | Reloads DB-generated fields after commit |
+| `ConfigDict(from_attributes=True)` | Lets Pydantic read from ORM object attributes |
+| `alembic init migrations` | Initialises Alembic in a project |
+| `alembic revision --autogenerate -m "..."` | Generates migration from ORM model changes |
+| `alembic upgrade head` | Applies all pending migrations |
