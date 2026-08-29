@@ -46,6 +46,7 @@ fastapi-learning/
 ├── phase-02-pydantic/      — request validation, custom validators, nested models
 ├── phase-03-dependency-injection/ — deps, shared deps, db session injection
 ├── phase-04-async-db/      — SQLAlchemy async, Alembic migrations
+├── phase-04.5-sqlalchemy/  — SQLAlchemy deep-dive: sync → async, engine/session/pool
 ├── phase-05-auth/          — JWT auth, password hashing, protected routes
 ├── phase-06-background-tasks/ — FastAPI BackgroundTasks, ARQ worker
 ├── phase-07-middleware/    — custom middleware, CORS, request logging
@@ -60,6 +61,7 @@ fastapi-learning/
 - [x] Phase 2 — Pydantic Models & Validation
 - [x] Phase 3 — Dependency Injection
 - [x] Phase 4 — Async Database (SQLAlchemy + Alembic)
+- [ ] Phase 4.5 — SQLAlchemy Deep-Dive (Sync → Async)
 - [x] Phase 5 — Authentication (JWT)
 - [ ] Phase 6 — Background Tasks & Workers
 - [ ] Phase 7 — Middleware

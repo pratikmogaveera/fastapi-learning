@@ -91,6 +91,44 @@ Learn FastAPI 0.141 through exercises that directly map to what you'll need for 
 
 ---
 
+## 4.5 SQLAlchemy Deep-Dive (Sync → Async)
+
+**Goal:** Understand SQLAlchemy from the ground up — sync first, then async. No FastAPI. Just Python scripts against a real PostgreSQL DB.
+
+**Tasks:**
+
+Part A — Sync SQLAlchemy:
+- Create a sync engine with `create_engine`
+- Open a raw `Connection` and run a plain SQL query (`text()`)
+- Define an ORM model with `DeclarativeBase`, create its table with `Base.metadata.create_all()`
+- Open a `Session`, add a row, commit, query it back
+- Understand what `session.add()`, `session.commit()`, `session.close()` each do
+- Use a context manager (`with Session(...) as session`) instead of manual open/close
+- Write a `get_db()` generator that yields a session and closes it after
+
+Part B — Async SQLAlchemy:
+- Swap `create_engine` → `create_async_engine`, `Session` → `AsyncSession`
+- Rewrite Part A CRUD as async functions
+- Understand why `expire_on_commit=False` is needed in async
+- Understand what `asyncpg` is and why it's needed
+
+Part C — Connection Pooling:
+- Explain what `pool_size` and `max_overflow` do
+- Understand why you never create an engine inside a request handler
+
+**Key Concepts:**
+- Engine = connection pool manager (one per app, created once)
+- Connection = a single physical DB connection (short-lived, checked out from pool)
+- Session = unit of work (tracks changes, issues SQL on commit)
+- Session is not a connection — it borrows one only when executing
+- `sessionmaker` / `async_sessionmaker` = session factory (call it to get a new session)
+- `expire_on_commit=True` (default) — ORM objects become "expired" after commit, next attribute access triggers a SELECT. In async this causes `MissingGreenlet` errors — so always set `expire_on_commit=False`
+- `asyncpg` is the async PostgreSQL driver — SQLAlchemy uses it under the hood when you use `postgresql+asyncpg://`
+
+**Done when:** You can explain in your own words what each of these is and how they relate: engine, connection, session, sessionmaker, asyncpg. And you've written sync + async CRUD scripts from scratch without copying phase-04.
+
+---
+
 ## 5. Authentication (JWT)
 
 **Goal:** Implement JWT-based auth — register, login, and protect routes.
