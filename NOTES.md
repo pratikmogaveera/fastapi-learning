@@ -125,3 +125,34 @@ _Add questions and answers as they come up during learning._
 | `alembic init migrations` | Initialises Alembic in a project |
 | `alembic revision --autogenerate -m "..."` | Generates migration from ORM model changes |
 | `alembic upgrade head` | Applies all pending migrations |
+
+---
+
+## 5. Authentication (JWT)
+
+### Key Concepts
+
+- `passlib` with `CryptContext(schemes=["bcrypt"])` handles password hashing. `pwd_context.hash()` hashes, `pwd_context.verify()` checks. Use `bcrypt==4.0.1` — bcrypt 5.x is incompatible with passlib 1.7.4.
+- Never store raw passwords. Never return hashed passwords in responses — keep `password` out of response models entirely.
+- `python-jose` handles JWT. `jwt.encode(payload, key, algorithm)` creates a token. `jwt.decode(token, key, algorithms)` verifies and decodes it.
+- The `exp` claim must be a `datetime` object or Unix timestamp integer — not a string. `python-jose` automatically rejects expired tokens during decode.
+- `sub` (subject) is the standard claim for storing the user identifier. Always store it as a string.
+- `jwt.decode` raises `JWTError` for invalid signature, expired token, or malformed token. Always catch it and raise a 401 — never let it bubble as a 500.
+- Define a Pydantic `Token` model and do `Token(**payload)` after decode — gives you a typed object instead of a raw dict for accessing claims.
+- `OAuth2PasswordBearer` is the FastAPI-native way to declare token auth in OpenAPI docs, but reading the `Authorization` header manually with `Header(...)` and `str.removeprefix("Bearer ")` works equally well for learning.
+- Return the same error message for "user not found" and "wrong password" — different messages allow email enumeration attacks.
+- `Annotated[str, Depends(authenticate_jwt)]` as a type alias (`CurrentUser`) keeps route signatures clean and the dependency reusable across multiple routes.
+
+### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `CryptContext(schemes=["bcrypt"])` | Configures passlib to use bcrypt for hashing |
+| `pwd_context.hash(password)` | Hashes a plain password |
+| `pwd_context.verify(plain, hashed)` | Verifies plain password against hash |
+| `jwt.encode(payload, key, algorithm)` | Creates a signed JWT string |
+| `jwt.decode(token, key, algorithms)` | Verifies and decodes a JWT; raises `JWTError` on failure |
+| `JWTError` | Exception raised by `python-jose` for invalid/expired tokens |
+| `Token(**payload)` | Constructs a typed Pydantic model from the decoded JWT dict |
+| `Header(...)` | Reads a required request header (`...` makes it mandatory) |
+| `str.removeprefix("Bearer ")` | Strips the Bearer prefix from the Authorization header value |

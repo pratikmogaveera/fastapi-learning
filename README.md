@@ -60,7 +60,7 @@ fastapi-learning/
 - [x] Phase 2 — Pydantic Models & Validation
 - [x] Phase 3 — Dependency Injection
 - [x] Phase 4 — Async Database (SQLAlchemy + Alembic)
-- [ ] Phase 5 — Authentication (JWT)
+- [x] Phase 5 — Authentication (JWT)
 - [ ] Phase 6 — Background Tasks & Workers
 - [ ] Phase 7 — Middleware
 - [ ] Phase 8 — Testing
