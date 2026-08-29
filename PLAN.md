@@ -93,39 +93,123 @@ Learn FastAPI 0.141 through exercises that directly map to what you'll need for 
 
 ## 4.5 SQLAlchemy Deep-Dive (Sync → Async)
 
-**Goal:** Understand SQLAlchemy from the ground up — sync first, then async. No FastAPI. Just Python scripts against a real PostgreSQL DB.
+**Goal:** Understand SQLAlchemy from the ground up by reading the official tutorial and implementing each concept side by side. No FastAPI. Standalone Python scripts only.
 
-**Tasks:**
+**Reference:** https://docs.sqlalchemy.org/en/20/tutorial/index.html
 
-Part A — Sync SQLAlchemy:
-- Create a sync engine with `create_engine`
-- Open a raw `Connection` and run a plain SQL query (`text()`)
-- Define an ORM model with `DeclarativeBase`, create its table with `Base.metadata.create_all()`
-- Open a `Session`, add a row, commit, query it back
-- Understand what `session.add()`, `session.commit()`, `session.close()` each do
-- Use a context manager (`with Session(...) as session`) instead of manual open/close
-- Write a `get_db()` generator that yields a session and closes it after
+---
 
-Part B — Async SQLAlchemy:
-- Swap `create_engine` → `create_async_engine`, `Session` → `AsyncSession`
-- Rewrite Part A CRUD as async functions
-- Understand why `expire_on_commit=False` is needed in async
-- Understand what `asyncpg` is and why it's needed
+**Part A — Engine and Connections**
+_Doc section: "Establishing Connectivity" + "Working with Transactions and the DBAPI"_
 
-Part C — Connection Pooling:
-- Explain what `pool_size` and `max_overflow` do
-- Understand why you never create an engine inside a request handler
+Read both sections, then write `part_a.py`:
+- Create a sync engine using `create_engine` with `echo=True` (use SQLite `:memory:` for now)
+- Open a `Connection` using `engine.connect()` as a context manager
+- Run a raw SQL query using `text()` and print the result
+- Insert a row using `text()` with bound parameters and commit ("commit as you go" style)
+- Repeat the insert using `engine.begin()` ("begin once" style)
+- Select rows back and iterate over the `Result` object — try tuple unpacking, index access, and attribute access
+- Switch to PostgreSQL URL and confirm it still works
 
-**Key Concepts:**
-- Engine = connection pool manager (one per app, created once)
-- Connection = a single physical DB connection (short-lived, checked out from pool)
-- Session = unit of work (tracks changes, issues SQL on commit)
-- Session is not a connection — it borrows one only when executing
-- `sessionmaker` / `async_sessionmaker` = session factory (call it to get a new session)
-- `expire_on_commit=True` (default) — ORM objects become "expired" after commit, next attribute access triggers a SELECT. In async this causes `MissingGreenlet` errors — so always set `expire_on_commit=False`
-- `asyncpg` is the async PostgreSQL driver — SQLAlchemy uses it under the hood when you use `postgresql+asyncpg://`
+**Key concepts from this part:**
+- Engine = connection pool, created once at startup, never inside a request
+- `Connection` = one physical DB connection, short-lived, always use as context manager
+- Transaction is always in progress by default — you must explicitly commit
+- `Result` rows behave like named tuples — three ways to access column values
+- `text()` uses `:param` style for bound parameters (never string-format user input)
 
-**Done when:** You can explain in your own words what each of these is and how they relate: engine, connection, session, sessionmaker, asyncpg. And you've written sync + async CRUD scripts from scratch without copying phase-04.
+---
+
+**Part B — Database Metadata**
+_Doc section: "Working with Database Metadata"_
+
+Read the section, then write `part_b.py`:
+- Define a `user_account` table using Core style: `MetaData`, `Table`, `Column`
+- Add a second `address` table with a `ForeignKey` to `user_account`
+- Emit DDL using `metadata_obj.create_all(engine)`
+- Inspect `user_table.c.keys()` and `user_table.primary_key`
+- Redefine the same two tables using ORM Declarative style: `DeclarativeBase`, `Mapped`, `mapped_column`
+- Emit DDL using `Base.metadata.create_all(engine)`
+- Confirm both approaches produce the same tables
+
+**Key concepts from this part:**
+- `MetaData` is the registry for all table definitions — one per app
+- Core `Table` and ORM `DeclarativeBase` both produce the same underlying `Table` object
+- `Mapped[str]` = NOT NULL, `Mapped[str | None]` = nullable
+- `Base.metadata.create_all()` is fine for scripts/tests; use Alembic for real apps
+
+---
+
+**Part C — Core CRUD (INSERT, SELECT, UPDATE, DELETE)**
+_Doc sections: "Using INSERT Statements", "Using SELECT Statements", "Using UPDATE and DELETE Statements"_
+
+Read all three sections, then write `part_c.py` (using the tables from Part B):
+- Insert a single row using `insert(user_table).values(...)`
+- Insert multiple rows using `executemany` style (list of dicts)
+- Select all rows using `select(user_table)`
+- Add a `WHERE` clause using `.where()`
+- Select specific columns only
+- Join `user_account` and `address` tables
+- Update a row using `update(user_table).where(...).values(...)`
+- Delete a row using `delete(user_table).where(...)`
+
+**Key concepts from this part:**
+- Core `insert()`, `select()`, `update()`, `delete()` are composable Python objects — not strings
+- `.where()` builds the WHERE clause — chain multiple for AND conditions
+- `result.scalars().all()` vs `result.all()` vs `result.scalar_one_or_none()` — know when to use each
+
+---
+
+**Part D — ORM Session and Unit of Work**
+_Doc section: "Data Manipulation with the ORM"_
+
+Read the section, then write `part_d.py` (using ORM mapped classes from Part B):
+- Create a `Session` using `Session(engine)` as context manager
+- Add a `User` object using `session.add()`, observe it's in `session.new` (pending state)
+- Call `session.flush()` manually — observe the INSERT happens but transaction not committed
+- Call `session.commit()` — observe the object gets its `id` populated
+- Fetch the same object back using `session.get(User, id)` (identity map)
+- Update the object by mutating its attribute and committing
+- Delete the object using `session.delete(obj)` and committing
+- Try `session.rollback()` — observe the change is undone
+- Replace manual `Session(engine)` with `sessionmaker` factory
+
+**Key concepts from this part:**
+- Session = unit of work. Tracks all pending changes in memory until flush/commit
+- `session.add()` → pending. `flush()` → SQL sent but not committed. `commit()` → persisted
+- Identity map: `session.get(User, 1)` returns the same Python object if already loaded — no extra query
+- `expire_on_commit=True` (default) — after commit, accessing an attribute triggers a lazy SELECT
+- `sessionmaker` is a factory — call it to get a new `Session` instance
+
+---
+
+**Part E — Async SQLAlchemy**
+
+After completing Parts A–D, rewrite `part_d.py` as `part_e.py` using async:
+- Replace `create_engine` → `create_async_engine` with `postgresql+asyncpg://` URL
+- Replace `Session` → `AsyncSession`, `sessionmaker` → `async_sessionmaker`
+- Wrap all DB calls in `async def` functions, `await` every execute/commit/refresh
+- Set `expire_on_commit=False` on the session factory — understand why it's required here
+- Confirm the same CRUD operations work
+
+**Key concepts from this part:**
+- `asyncpg` is the async PostgreSQL driver — SQLAlchemy calls it under the hood
+- `AsyncSession` doesn't support lazy loading — expired attributes can't trigger a SELECT mid-await
+- `expire_on_commit=False` prevents expiry so you can safely access attributes after commit without an extra query
+- `async_sessionmaker` is the async equivalent of `sessionmaker`
+
+---
+
+**Key Concepts (summary)**
+
+- Engine = connection pool manager (one per app, created once at startup)
+- Connection = one physical DB connection borrowed from the pool (short-lived)
+- Session = unit of work — tracks ORM object changes, not the same as a connection
+- Session borrows a Connection only when it needs to execute SQL
+- `sessionmaker` / `async_sessionmaker` = session factory, call it to get a new session per request
+- `asyncpg` = the async PostgreSQL DBAPI driver used by SQLAlchemy's async engine
+
+**Done when:** You can write sync and async CRUD scripts from scratch. You can explain the engine → pool → connection → session chain in your own words without referencing code.
 
 ---
 
