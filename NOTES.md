@@ -156,3 +156,35 @@ _Add questions and answers as they come up during learning._
 | `Token(**payload)` | Constructs a typed Pydantic model from the decoded JWT dict |
 | `Header(...)` | Reads a required request header (`...` makes it mandatory) |
 | `str.removeprefix("Bearer ")` | Strips the Bearer prefix from the Authorization header value |
+
+---
+
+## 4.5 SQLAlchemy Deep-Dive (Sync → Async)
+
+### Part A — Engine and Connections
+
+#### Key Concepts
+
+- `Engine` is the central source of connections to a single database and a **connection pool manager**. It maintains a pool of reusable connections. Create it once at startup — never inside a request handler or loop.
+- `echo=True` logs all SQL emitted to stdout — useful during learning and debugging.
+- Engine uses **lazy initialization** — it doesn't actually connect to the DB when created. The first connection happens when you first execute something.
+- When SQLAlchemy connects to PostgreSQL for the first time, it runs 3 introspection queries (`pg_catalog.version()`, `current_schema()`, `standard_conforming_strings`) to configure the dialect. Not visible with SQLite.
+- `engine.connect()` returns a `Connection` object. A transaction is always in progress by default (DBAPI behavior). If the `with` block exits without a commit, SQLAlchemy automatically issues a `ROLLBACK`.
+- `engine.begin()` is the "begin once" style — commits automatically on clean exit, rolls back automatically if an exception is raised. All-or-nothing. Prefer this when the entire block is one logical transaction.
+- `engine.connect()` is "commit as you go" — you call `conn.commit()` manually. Multiple commits mid-block are possible, so a partial commit + exception = partial data persisted. Use when you need fine-grained control.
+- Bound parameters use `:param` syntax in `text()`. SQLAlchemy translates to the backend's native style — `?` for SQLite, `%(param)s` for PostgreSQL. Never string-format user input into SQL.
+- In-memory SQLite (`:memory:`) is per-connection — each new `engine.connect()` gets a fresh empty DB. Use a file-based DB (`sqlite:///file.db`) if you need data to persist across connections.
+- `psycopg2-binary` is the sync PostgreSQL driver. `psycopg2` (without binary) requires PostgreSQL dev headers to compile from source — use the binary variant for development.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `create_engine(url, echo=True)` | Creates sync connection pool; `echo=True` logs all SQL |
+| `engine.connect()` | Returns a `Connection`; "commit as you go" style |
+| `engine.begin()` | Returns a `Connection`; auto-commits on success, auto-rolls back on exception |
+| `conn.execute(text(...))` | Executes a raw SQL statement |
+| `conn.commit()` | Commits the current transaction |
+| `text("SQL :param")` | Wraps a raw SQL string; supports bound parameters via `:param` syntax |
+| `result.all()` | Returns all rows as a list of named tuples |
+| `psycopg2-binary` | Sync PostgreSQL DBAPI driver (pre-compiled, no system deps required) |
