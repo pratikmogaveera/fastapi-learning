@@ -7,9 +7,9 @@ AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_
 
 
 class Base(AsyncAttrs, DeclarativeBase):
-    pass
+  pass
 
 
 async def get_db():
-    async with AsyncSessionLocal() as session:
-        yield session
+  async with AsyncSessionLocal() as session:
+    yield session

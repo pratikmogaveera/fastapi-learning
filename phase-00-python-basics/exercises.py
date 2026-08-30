@@ -23,9 +23,9 @@ from typing import TypedDict
 
 
 def greet(name: str, age: int, email: str | None = None) -> str:  # add type hints here
-    if email:
-        return f"Hello {name}, age {age}, email: {email}"
-    return f"Hello {name}, age {age}"
+  if email:
+    return f"Hello {name}, age {age}, email: {email}"
+  return f"Hello {name}, age {age}"
 
 
 print(greet("Pratik", 26))
@@ -50,26 +50,26 @@ print(greet("Pratik", 26, "pratik@example.com"))
 
 
 class LinkClass(TypedDict):
-    short_code: str
-    original_url: str
-    click_count: int
+  short_code: str
+  original_url: str
+  click_count: int
 
 
 class Link:
-    def __init__(self, short_code: str, original_url: str, click_count: int = 0) -> None:
-        self.short_code = short_code
-        self.original_url = original_url
-        self.click_count = click_count
+  def __init__(self, short_code: str, original_url: str, click_count: int = 0) -> None:
+    self.short_code = short_code
+    self.original_url = original_url
+    self.click_count = click_count
 
-    def increment_clicks(self):
-        self.click_count += 1
+  def increment_clicks(self):
+    self.click_count += 1
 
-    def to_dict(self) -> LinkClass:
-        return {
-            "short_code": self.short_code,
-            "original_url": self.original_url,
-            "click_count": self.click_count,
-        }
+  def to_dict(self) -> LinkClass:
+    return {
+      "short_code": self.short_code,
+      "original_url": self.original_url,
+      "click_count": self.click_count,
+    }
 
 
 link = Link("abc123", "https://google.com")
@@ -107,19 +107,19 @@ print(link.to_dict())
 # TODO: implement log_call decorator
 def log_call(func):
 
-    def wrapper(*args, **kwargs):
-        print(f"Calling: {func.__name__}")
-        result = func(*args, **kwargs)
-        print(f"Done: {func.__name__}")
-        return result
+  def wrapper(*args, **kwargs):
+    print(f"Calling: {func.__name__}")
+    result = func(*args, **kwargs)
+    print(f"Done: {func.__name__}")
+    return result
 
-    return wrapper
+  return wrapper
 
 
 # TODO: apply decorator to get_user and call it
 @log_call
 def get_user() -> dict:
-    return {"id": 1, "name": "Pratik"}
+  return {"id": 1, "name": "Pratik"}
 
 
 result = get_user()
@@ -153,13 +153,13 @@ import asyncio
 
 
 async def fetch_link(short_code: str) -> dict:
-    await asyncio.sleep(0.1)
-    return {"short_code": short_code, "url": "https://example.com"}
+  await asyncio.sleep(0.1)
+  return {"short_code": short_code, "url": "https://example.com"}
 
 
 async def main() -> None:
-    response = await fetch_link("abc123")
-    print(response)
+  response = await fetch_link("abc123")
+  print(response)
 
 
 asyncio.run(main())
@@ -185,8 +185,8 @@ asyncio.run(main())
 
 # TODO: implement describe
 def describe(**kwargs):
-    for key in kwargs:
-        print(f"{key}: {kwargs[key]}")
+  for key in kwargs:
+    print(f"{key}: {kwargs[key]}")
 
 
 describe(name="Pratik", role="SDE1", company="MO")
@@ -203,9 +203,9 @@ describe(name="Pratik", role="SDE1", company="MO")
 # Expected: {'abc': 'https://google.com', 'xyz': 'https://github.com'}
 
 links = [
-    {"short_code": "abc", "original_url": "https://google.com", "is_active": True},
-    {"short_code": "def", "original_url": "https://deleted.com", "is_active": False},
-    {"short_code": "xyz", "original_url": "https://github.com", "is_active": True},
+  {"short_code": "abc", "original_url": "https://google.com", "is_active": True},
+  {"short_code": "def", "original_url": "https://deleted.com", "is_active": False},
+  {"short_code": "xyz", "original_url": "https://github.com", "is_active": True},
 ]
 
 # TODO: Task A — list comprehension

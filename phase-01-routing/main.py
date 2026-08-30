@@ -9,7 +9,7 @@ app = FastAPI()
 
 @app.get("/health", summary="A test endpoint to check if the app is running.")
 async def root():
-    return {"message": "Everything working as expected."}
+  return {"message": "Everything working as expected."}
 
 
 # EXERCISE 1 — Basic route
@@ -23,9 +23,9 @@ async def root():
 
 @app.get("/items/{item_id}", summary="Get endpoint that captures path and query parameters.")
 async def get_item_by_id(item_id: int, q: str | None = None):
-    response: dict[str, int | str | None] = {"item_id": item_id, "q": q}
+  response: dict[str, int | str | None] = {"item_id": item_id, "q": q}
 
-    return response
+  return response
 
 
 # EXERCISE 2 — Response model
@@ -36,14 +36,14 @@ async def get_item_by_id(item_id: int, q: str | None = None):
 
 
 class ItemResponse(BaseModel):
-    id: int
-    name: str
-    price: float
+  id: int
+  name: str
+  price: float
 
 
 @app.get("/items/{item_id}/detail", response_model=ItemResponse)
 async def get_items_details(item_id: int):
-    return {"id": item_id, "name": "Item Name", "price": 1.2}
+  return {"id": item_id, "name": "Item Name", "price": 1.2}
 
 
 # EXERCISE 3 — Redirect response
@@ -54,7 +54,7 @@ async def get_items_details(item_id: int):
 
 @app.get("/go")
 async def go_to_url(url: str):
-    return RedirectResponse(url=url, status_code=302)
+  return RedirectResponse(url=url, status_code=302)
 
 
 # EXERCISE 4 — Read a request header
@@ -66,4 +66,4 @@ async def go_to_url(url: str):
 
 @app.get("/whoami")
 async def who_am_i(user_agent: Annotated[str | None, Header()] = None):
-    return {"user_agent": user_agent}
+  return {"user_agent": user_agent}
