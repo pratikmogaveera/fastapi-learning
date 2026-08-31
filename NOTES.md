@@ -188,3 +188,34 @@ _Add questions and answers as they come up during learning._
 | `text("SQL :param")` | Wraps a raw SQL string; supports bound parameters via `:param` syntax |
 | `result.all()` | Returns all rows as a list of named tuples |
 | `psycopg2-binary` | Sync PostgreSQL DBAPI driver (pre-compiled, no system deps required) |
+
+### Part B — Database Metadata
+
+#### Key Concepts
+
+- `MetaData` is a registry for all table definitions — one per app. Holds `Table` objects keyed by name.
+- Core style: define tables explicitly using `Table`, `Column`, and type objects (`Integer`, `String`, etc.). Gives you full control but is more verbose.
+- ORM style: subclass `DeclarativeBase`, declare mapped classes with `Mapped[T]` annotations. Cleaner, Python-typed, integrates with IDE tooling. Still creates a `Table` object under the hood — accessible via `MyClass.__table__`.
+- Both styles produce the same underlying `Table` object. ORM is a layer on top of Core, not a replacement.
+- `Mapped[str]` = NOT NULL column. `Mapped[str | None]` = nullable column. The Python type annotation directly controls nullability.
+- `mapped_column()` is the ORM equivalent of `Column()` — use it when you need extra config (e.g. `primary_key=True`, `ForeignKey`, `String(30)`). For simple columns, `Mapped[str]` alone is enough.
+- `ForeignKey("tablename.column")` declares a FK constraint. Uses the string `__tablename__` value, not the class name.
+- `Base.metadata.create_all(engine)` emits `CREATE TABLE` for all mapped classes. `metadata_obj.create_all(engine)` does the same for Core tables.
+- Two separate `MetaData` objects = two separate registries. Alembic's `target_metadata` can only point to one — mixing Core and ORM tables with separate metadata makes autogenerate miss half the tables. Solution: share one `MetaData` by passing it to `DeclarativeBase(metadata=shared_metadata_obj)`.
+- `table.c.keys()` returns a list of column names. `table.primary_key` returns the `PrimaryKeyConstraint` object.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `MetaData()` | Registry that holds all `Table` objects |
+| `Table(name, metadata, *columns)` | Core-style table definition |
+| `Column(name, type, ...)` | Core-style column definition |
+| `DeclarativeBase` | Base class for ORM mapped classes; creates its own `MetaData` |
+| `Mapped[T]` | ORM column type annotation; `T` controls nullability |
+| `mapped_column(...)` | ORM column config (PK, FK, type length, etc.) |
+| `ForeignKey("table.col")` | Declares a foreign key constraint |
+| `metadata_obj.create_all(engine)` | Emits `CREATE TABLE` for all registered Core tables |
+| `Base.metadata.create_all(engine)` | Emits `CREATE TABLE` for all ORM mapped classes |
+| `table.c.keys()` | Returns list of column names |
+| `table.primary_key` | Returns the `PrimaryKeyConstraint` for the table |
