@@ -219,3 +219,35 @@ _Add questions and answers as they come up during learning._
 | `Base.metadata.create_all(engine)` | Emits `CREATE TABLE` for all ORM mapped classes |
 | `table.c.keys()` | Returns list of column names |
 | `table.primary_key` | Returns the `PrimaryKeyConstraint` for the table |
+
+### Part C — Core CRUD (INSERT, SELECT, JOIN, UPDATE, DELETE)
+
+#### Key Concepts
+
+- `insert()`, `select()`, `update()`, `delete()` are composable Python objects — not strings. Chain methods like `.where()`, `.values()`, `.returning()` to build the statement before executing.
+- `.returning(*cols)` on INSERT, UPDATE, or DELETE returns the specified columns from affected rows. Result must be consumed before the cursor is closed — call `result.all()` once and store it if you need the data later.
+- When inserting rows with FK dependencies (e.g. address requires a user_id), capture the parent row's id from RETURNING before committing, then use it in the child insert. Calling `result.all()` a second time returns an empty list — the cursor is exhausted.
+- Multi-row insert: pass a list of dicts to `.values([...])`. SQLAlchemy batches these into a single `INSERT ... VALUES (...), (...)` statement.
+- `.where()` builds the WHERE clause. Chain multiple `.where()` calls for AND conditions. Pass multiple expressions to a single `.where()` for the same effect.
+- SELECT specific columns: `select(table.c.col1, table.c.col2)` — FROM is inferred from the columns.
+- JOIN: use `.join(right_table, on_clause)` on the `select()` — left side is inferred from the columns in the SELECT list. Use `.join_from(left, right, on_clause)` for explicit left side. ON clause is auto-inferred from FK constraints when unambiguous — explicit is safer and clearer.
+- `result.all()` — list of named tuples. Rows support attribute access (`row.name`), index access (`row[0]`), and tuple unpacking.
+- `[cached since ...]` in SQLAlchemy echo output means the query *compilation* was cached — it still hits the DB. Not a result cache.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `insert(table).values(...)` | Builds an INSERT statement |
+| `insert(table).values([...])` | Multi-row INSERT with a list of dicts |
+| `select(table)` | Builds a SELECT for all columns |
+| `select(table.c.col1, ...)` | SELECT specific columns; FROM inferred |
+| `.where(condition)` | Adds a WHERE clause; chain for AND |
+| `.join(right, on_clause)` | INNER JOIN; left side inferred from SELECT columns |
+| `.join_from(left, right, on_clause)` | INNER JOIN with explicit left side |
+| `.join(..., isouter=True)` | LEFT OUTER JOIN |
+| `update(table).where(...).values(...)` | Builds an UPDATE statement |
+| `delete(table).where(...)` | Builds a DELETE statement |
+| `.returning(*cols)` | Returns specified columns from affected rows |
+| `result.all()` | Consumes and returns all rows as named tuples; call once only |
+| `result.rowcount` | Number of rows matched by WHERE (UPDATE/DELETE) |
