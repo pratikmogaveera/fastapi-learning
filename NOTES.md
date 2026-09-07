@@ -251,3 +251,36 @@ _Add questions and answers as they come up during learning._
 | `.returning(*cols)` | Returns specified columns from affected rows |
 | `result.all()` | Consumes and returns all rows as named tuples; call once only |
 | `result.rowcount` | Number of rows matched by WHERE (UPDATE/DELETE) |
+
+### Part D — ORM Session and Unit of Work
+
+#### Key Concepts
+
+- ORM objects go through states: **transient** (created, not added) → **pending** (added to session, not flushed) → **persistent** (flushed/committed, has a DB row) → **expired** (committed, attributes cleared) → **detached** (session closed).
+- `session.add(obj)` marks an object as pending. No SQL is sent yet.
+- `session.flush()` sends SQL to the DB but keeps the transaction open. After flush, `obj.id` is populated via `RETURNING`. Rarely called manually — Session autoflushes before any SELECT.
+- `session.commit()` commits the transaction. By default (`expire_on_commit=True`) all objects are expired — next attribute access triggers a SELECT to reload.
+- `session.get(Model, pk)` checks the **identity map** first. If the object is already in memory, it returns the same Python object with no extra query. Only hits the DB if not loaded.
+- To UPDATE: just mutate the attribute (`obj.name = "new"`). Session tracks it via `session.dirty`. UPDATE is emitted automatically on next flush/commit.
+- To DELETE: `session.delete(obj)`. No SQL until flush. After commit, object is removed from session.
+- `session.rollback()` rolls back the transaction AND expires all objects. Next attribute access re-fetches from DB.
+- After rollback, `obj.__dict__` is wiped to just `_sa_instance_state`. Accessing any attribute triggers a new SELECT.
+- `sessionmaker(bind=engine, expire_on_commit=False)` creates a session factory. Call it to get a new session per request. `expire_on_commit=False` prevents expiry after commit — required in async context since expired attributes can't trigger lazy SELECTs mid-await.
+- Python `with` blocks do NOT create a new variable scope — variables defined inside are accessible outside. So `latest_user_id` set inside a `with Session()` block is accessible in the next `with` block.
+- After session closes, objects become **detached**. Accessing attributes raises `DetachedInstanceError` unless `expire_on_commit=False` was set (attributes stay populated).
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `Session(engine)` | Creates a session directly; use as context manager |
+| `sessionmaker(bind=engine, expire_on_commit=False)` | Session factory — call it to get a new `Session` |
+| `session.add(obj)` | Marks object as pending; queued for INSERT on flush |
+| `session.flush()` | Sends pending SQL to DB; transaction stays open |
+| `session.commit()` | Commits transaction; expires objects by default |
+| `session.rollback()` | Rolls back transaction; expires all objects |
+| `session.get(Model, pk)` | Returns object from identity map or DB by primary key |
+| `session.delete(obj)` | Marks object for DELETE on next flush |
+| `session.new` | Set of pending (not yet flushed) objects |
+| `session.dirty` | Set of persistent objects with uncommitted changes |
+| `expire_on_commit=False` | Keep attributes populated after commit; required for async |
