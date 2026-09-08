@@ -235,24 +235,81 @@ After completing Parts A–D, rewrite `part_d.py` as `part_e.py` using async:
 
 ---
 
+## 5.5 Alembic Deep-Dive
+
+**Goal:** Understand what Alembic is actually doing — the files, the version chain, env.py internals, and how to handle real migration scenarios. You've run the commands in phases 4 and 5 without knowing what's happening inside.
+
+**Part A — Structure & Version Chain**
+- What each file in `migrations/` does (`env.py`, `versions/`, `script.py.mako`, `alembic.ini`)
+- How the version chain works — `revision`, `down_revision`, `head`
+- The `alembic_version` table — what it stores, how Alembic uses it to know what's applied
+- `alembic history`, `alembic current`, `alembic heads`
+
+**Part B — env.py Internals**
+- What `env.py` does on every `alembic` command
+- `target_metadata` — how autogenerate compares Python models to the live DB schema
+- Why you must import all models before `target_metadata = Base.metadata`
+- The async setup pattern (`run_async_migrations` + `run_sync`) — why it exists
+
+**Part C — Migration Operations**
+- `alembic revision --autogenerate` — what it detects and what it misses (data changes, some constraints)
+- `alembic upgrade head`, `alembic downgrade -1`, `alembic downgrade base`
+- Writing a manual migration — `op.add_column`, `op.drop_column`, `op.alter_column`
+- Adding a column with a `server_default` vs a Python default — why it matters for existing rows
+
+**Part D — Real-World Scenarios**
+- Two migrations with the same `down_revision` (branch conflict) — how to detect and resolve
+- What happens if you delete a migration file that's already been applied
+- Running migrations programmatically on app startup vs manually in CI
+
+**Done when:** You can explain the version chain, read `env.py` without confusion, write a manual migration from scratch, and handle a branch conflict.
+
+---
+
 ## 6. Background Tasks & Workers
 
-**Goal:** Run work outside the request lifecycle — both FastAPI's built-in `BackgroundTasks` and a proper async queue with ARQ.
+### Part A — FastAPI BackgroundTasks
+
+**Goal:** Understand FastAPI's built-in background task system — what it is, when to use it, and its limits.
 
 **Tasks:**
-- Use `BackgroundTasks` to log a click after returning a redirect response
-- Set up ARQ with Redis
-- Define an ARQ worker function (geo lookup + mock DB write)
-- Enqueue a job from a route handler
-- Run the worker separately
+- Use `BackgroundTasks` to run a task after returning a response
+- Pass arguments to the background function
+- Add multiple background tasks in one request
+- Observe that the task runs in the same process as the server
 
 **Key Concepts:**
-- `BackgroundTasks` — when to use (simple fire-and-forget in same process)
-- ARQ — when to use (separate process, retries, observability)
-- `await asyncio.sleep()` to simulate async work
-- Worker startup with `arq.run_worker`
+- `BackgroundTasks` runs after the response is sent but inside the same process
+- No retries, no persistence, no observability — fire and forget only
+- When it's appropriate vs when you need a real queue
 
-**Done when:** A `GET /{short_code}` redirect endpoint returns the response immediately, then fires a background job that "processes" click data (logged to console). Worker runs in a separate terminal.
+**Done when:** A route returns a response immediately and the background function logs to console after. You can explain why this is not suitable for heavy or failure-prone work.
+
+---
+
+### Part B — ARQ Workers
+
+**Goal:** Understand ARQ from the ground up before wiring it into FastAPI.
+
+**Part B1 — ARQ Basics**
+- What ARQ is — async job queue backed by Redis
+- Define a worker function, configure `WorkerSettings` with `redis_settings`
+- Enqueue a job using `ArqRedis.enqueue_job()`
+- Run the worker with `arq worker_module.WorkerSettings`
+- Observe job lifecycle in Redis keys
+
+**Part B2 — Job Configuration**
+- Retries (`max_tries`), timeout (`job_timeout`), unique jobs (`job_id`)
+- Deferred jobs (`_defer_by`, `_defer_until`)
+- Job result storage and expiry (`keep_result`)
+
+**Part B3 — Wire into FastAPI**
+- Create an ARQ Redis pool on app startup (`create_pool` in `lifespan`)
+- Enqueue a job from a route handler
+- Run the FastAPI server and ARQ worker in separate terminals
+- A `GET /{short_code}` redirect that enqueues a click-logging job
+
+**Done when:** Route returns a redirect immediately, worker processes the click job in a separate process. You can explain the difference between Part A and Part B in one sentence.
 
 ---
 
@@ -301,18 +358,38 @@ After completing Parts A–D, rewrite `part_d.py` as `part_e.py` using async:
 
 ## 9. Redis Caching & Rate Limiting
 
+### Part A — Redis Fundamentals
+
+**Goal:** Understand the Redis client directly before using it for caching or rate limiting.
+
+**Tasks:**
+- Connect using `redis.asyncio` from a standalone script
+- `get`, `set`, `delete`, `exists`
+- `set` with `ex` (TTL) — observe key expiry
+- `incr`, `expire` — building blocks for rate limiting
+- `keys`, `ttl` — inspection commands
+
+**Key Concepts:**
+- Redis is an in-memory key-value store — all data lives in RAM
+- TTL (time-to-live) — keys expire automatically after a set duration
+- `incr` is atomic — safe for counters even under concurrent requests
+- Redis single-threaded command execution — why race conditions don't apply to individual commands
+
+**Done when:** You can run Redis operations from a standalone async script and explain what TTL, key expiry, and atomic increment mean.
+
+---
+
+### Part B — Caching & Rate Limiting in FastAPI
+
 **Goal:** Use Redis for caching hot data and implementing per-user rate limiting.
 
 **Tasks:**
-- Connect to Redis using `redis-py` async client
 - Cache a DB lookup result in Redis with a TTL
 - Invalidate cache on update
 - Implement a sliding window rate limiter using Redis `INCR` + `EXPIRE`
 - Apply rate limit as a dependency on a route
 
 **Key Concepts:**
-- `redis.asyncio` client
-- `await redis.get()`, `await redis.set()`, `await redis.incr()`
 - Cache-aside pattern
 - Sliding window vs fixed window rate limiting
 - Using `Depends()` for rate limit enforcement
