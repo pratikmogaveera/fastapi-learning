@@ -284,3 +284,33 @@ _Add questions and answers as they come up during learning._
 | `session.new` | Set of pending (not yet flushed) objects |
 | `session.dirty` | Set of persistent objects with uncommitted changes |
 | `expire_on_commit=False` | Keep attributes populated after commit; required for async |
+
+
+### Part E — Async SQLAlchemy
+
+#### Key Concepts
+
+- `create_async_engine` with `postgresql+asyncpg://` URL is the async equivalent of `create_engine`. Same "create once at startup" rule applies.
+- `async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)` is the async session factory. `expire_on_commit=False` is mandatory in async — expired attributes can't trigger a lazy SELECT mid-await.
+- All session operations must be awaited: `await session.flush()`, `await session.commit()`, `await session.rollback()`, `await session.get()`, `await session.delete()`.
+- `AsyncAttrs` mixin must be added to `DeclarativeBase` for async-safe attribute access. Without it, any attribute access that triggers a lazy load hits a `MissingGreenlet` error.
+- Rollback expires all objects regardless of `expire_on_commit`. After rollback, accessing an attribute directly will trigger a lazy load — which fails synchronously in async context. Always re-fetch with `await session.get()` after rollback instead of relying on the expired object.
+- `AsyncAttrs` provides `await obj.awaitable_attrs.field` as an escape hatch for one-off async attribute access — but explicit re-fetch is the cleaner pattern in practice.
+- Identity map works the same as sync: `session.get(Model, pk)` returns the cached Python object if already loaded in the current session — no extra SELECT.
+- The engine → pool → connection → session chain is identical to sync. `AsyncSession` borrows a connection from the async pool only when it needs to execute SQL.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `create_async_engine(url, echo=True)` | Creates async connection pool for PostgreSQL via asyncpg |
+| `async_sessionmaker(bind, class_, expire_on_commit)` | Async session factory |
+| `AsyncSession` | Async unit of work — all operations must be awaited |
+| `AsyncAttrs` | Mixin for `DeclarativeBase` — enables async-safe attribute access |
+| `await session.flush()` | Sends pending SQL to DB; transaction stays open |
+| `await session.commit()` | Commits transaction |
+| `await session.rollback()` | Rolls back transaction; expires all objects |
+| `await session.get(Model, pk)` | Fetches by PK from identity map or DB |
+| `await session.delete(obj)` | Marks object for DELETE on next flush |
+| `obj.awaitable_attrs.field` | Async attribute access escape hatch (prefer re-fetch instead) |
+| `asyncio.run(main())` | Entry point for running an async function from a sync script |
