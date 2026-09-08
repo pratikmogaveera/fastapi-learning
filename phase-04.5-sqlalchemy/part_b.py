@@ -1,4 +1,5 @@
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table, create_engine
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 pg_engine = create_engine("postgresql://root:root@localhost:5432/fastapi-pg", echo=True)
@@ -32,7 +33,7 @@ print(user_accounts.primary_key)
 
 
 # ORM Method
-class Base(DeclarativeBase):
+class Base(AsyncAttrs, DeclarativeBase):
   pass
 
 
