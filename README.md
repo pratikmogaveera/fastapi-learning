@@ -63,7 +63,7 @@ fastapi-learning/
 - [x] Phase 4 — Async Database (SQLAlchemy + Alembic)
 - [x] Phase 4.5 — SQLAlchemy Deep-Dive (Sync → Async)
 - [x] Phase 5 — Authentication (JWT)
-- [ ] Phase 5.5 — Alembic Deep-Dive
+- [ ] Phase 5.5 — Alembic Deep-Dive (Parts A & B done)
 - [ ] Phase 6 — Background Tasks & Workers (Part A: BackgroundTasks, Part B: ARQ)
 - [ ] Phase 7 — Middleware
 - [ ] Phase 8 — Testing
