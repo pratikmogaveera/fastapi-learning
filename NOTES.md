@@ -314,3 +314,87 @@ _Add questions and answers as they come up during learning._
 | `await session.delete(obj)` | Marks object for DELETE on next flush |
 | `obj.awaitable_attrs.field` | Async attribute access escape hatch (prefer re-fetch instead) |
 | `asyncio.run(main())` | Entry point for running an async function from a sync script |
+
+---
+
+## 5.5 Alembic Deep-Dive
+
+### Part A — Structure & Version Chain
+
+#### Key Concepts
+
+- `alembic.ini` — config file. Holds `sqlalchemy.url` and points to the migrations directory.
+- `migrations/env.py` — the script Alembic runs on every command. Configures the engine, sets `target_metadata`, and calls `run_migrations_online()` or `run_migrations_offline()`.
+- `migrations/script.py.mako` — Jinja template used to generate new revision files. Modifying this changes what boilerplate new revisions get.
+- `migrations/versions/` — one `.py` file per revision. Each file has `revision`, `down_revision`, `upgrade()`, and `downgrade()`.
+- The version chain is a linked list: each revision's `down_revision` points to its parent. `head` is the latest. `base` is the start (no parent).
+- `alembic_version` table — Alembic creates this in your DB. Stores one row: the currently applied revision ID. Alembic reads it to know where you are.
+- `alembic history` — prints the full chain oldest to newest.
+- `alembic current` — queries `alembic_version` to show where the live DB is right now.
+- `alembic heads` — shows the latest revision(s) in the chain. Matches `current` when fully up to date; diverges after a downgrade.
+
+#### APIs / Tools Learned
+
+| Command | What it does |
+|---|---|
+| `alembic history` | Lists all revisions in the chain |
+| `alembic current` | Shows the revision the live DB is currently at |
+| `alembic heads` | Shows the latest revision(s) in the chain |
+
+---
+
+### Part B — env.py Internals
+
+#### Key Concepts
+
+- `env.py` runs on every Alembic command — it's the bridge between your models and the DB.
+- `target_metadata = Base.metadata` — points Alembic at your ORM model registry. Autogenerate diffs this against the live DB schema.
+- All models must be imported before `target_metadata` is set. If a model isn't imported, autogenerate can't see it and will generate a `drop_table` for it.
+- Async `env.py` pattern: define `run_async_migrations()` as an async function, then use `asyncio.run()` + `connectable.run_sync(do_run_migrations)` to run migrations synchronously inside the async engine. Alembic's migration operations are sync-only — they can't be awaited directly.
+- `run_migrations_online()` — connects to a live DB and applies migrations. Used in normal operation.
+- `run_migrations_offline()` — generates SQL scripts without connecting. Used for reviewing migrations before applying.
+
+---
+
+### Part C — Migration Operations
+
+#### Key Concepts
+
+- `alembic upgrade head` — applies all pending migrations from current to head.
+- `alembic downgrade -1` — rolls back one step. Alembic runs `downgrade()` of the current revision.
+- `alembic downgrade base` — rolls back all migrations to the initial state. Alembic walks the chain one step at a time — you'll see one log line per migration.
+- `alembic revision -m "message"` — creates an empty revision file with no `upgrade()`/`downgrade()` body. Use this for manual migrations.
+- `alembic revision --autogenerate -m "message"` — detects model changes and generates the body automatically. Misses: renames (sees drop + add instead), some constraints, data migrations.
+- Column rename limitation: autogenerate sees a rename as `drop_column` + `add_column` — existing data is lost. Must write a manual `op.alter_column(..., new_column_name=...)`.
+- `op.add_column(table, Column(...))` — adds a column in upgrade.
+- `op.drop_column(table, column_name)` — removes a column in downgrade.
+- `op.alter_column(table, col, ...)` — modifies a column (rename, type change, nullability).
+- `server_default` vs `default`:
+  - `server_default="value"` — the DB fills in the value. Works during `ALTER TABLE` for existing rows.
+  - `default=value` — Python/SQLAlchemy fills in the value when you do `session.add(obj)`. The DB knows nothing about it.
+  - Adding a `NOT NULL` column to a table with existing rows requires `server_default` — `default` alone causes a "column contains null values" error because the DB can't backfill.
+
+#### APIs / Tools Learned
+
+| Command / API | What it does |
+|---|---|
+| `alembic upgrade head` | Applies all pending migrations |
+| `alembic downgrade -1` | Rolls back one migration |
+| `alembic downgrade base` | Rolls back all migrations |
+| `alembic revision -m "..."` | Creates an empty manual revision |
+| `op.add_column(table, Column(...))` | Adds a column |
+| `op.drop_column(table, col_name)` | Drops a column |
+| `op.alter_column(table, col, ...)` | Alters a column (rename, type, nullability) |
+| `server_default="value"` | DB-level default — used for backfilling existing rows |
+| `default=value` | Python-level default — SQLAlchemy only, DB unaware |
+
+## Q&A
+
+### Why does `alembic downgrade base` show one log line per migration?
+Alembic always walks the version chain one step at a time — it can't skip revisions. Each migration's `downgrade()` runs in reverse order. `base` just means "keep going until there's no more `down_revision`".
+
+### Why can't autogenerate detect column renames?
+It has no concept of intent. It sees that a column with the old name is gone and a new column appeared. From its perspective, that's a delete + add. To rename, you must write a manual `op.alter_column(..., new_column_name=...)` migration.
+
+### When do you use `server_default` vs `default`?
+Use `server_default` when the column is `NOT NULL` and the table already has rows — the DB needs a value to backfill immediately during `ALTER TABLE`. Use `default` in Python for application-level defaults when inserting new rows via SQLAlchemy (e.g. generating UUIDs, timestamps in Python). In practice, use `server_default` for timestamps and booleans in migrations, and `default` for Python-generated values like UUIDs.
