@@ -13,4 +13,5 @@ class Users(Base):
   name: Mapped[str]
   email: Mapped[str]
   password: Mapped[str]
+  country: Mapped[str | None]
   created_at: Mapped[datetime] = mapped_column(server_default=func.now())
