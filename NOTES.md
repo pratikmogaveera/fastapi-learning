@@ -398,3 +398,38 @@ It has no concept of intent. It sees that a column with the old name is gone and
 
 ### When do you use `server_default` vs `default`?
 Use `server_default` when the column is `NOT NULL` and the table already has rows — the DB needs a value to backfill immediately during `ALTER TABLE`. Use `default` in Python for application-level defaults when inserting new rows via SQLAlchemy (e.g. generating UUIDs, timestamps in Python). In practice, use `server_default` for timestamps and booleans in migrations, and `default` for Python-generated values like UUIDs.
+
+
+---
+
+### Part D — Real-World Scenarios
+
+#### Key Concepts
+
+- **Branch conflict** — happens when two revisions share the same `down_revision` (two devs branch off the same parent independently). Result: two heads. `alembic heads` shows both. `alembic upgrade head` errors with "Multiple head revisions are present".
+- **Resolving a branch conflict** — `alembic merge -m "..." heads` creates a new revision whose `down_revision` is a **tuple of both heads**. This stitches the branches into a single head. The merge revision has empty `upgrade()`/`downgrade()` by default — it's purely a chain-joining node.
+- When applying after a merge, both branch revisions apply first (in either order — they're parallel), then the merge revision last (it depends on both). Echo shows both parents: `Running upgrade 4ba2e4855e2d, 79eceb9feb0d -> 0dd540d4c8ac`.
+- `alembic current` tags the merge revision as `(mergepoint)`.
+- **Deleting an applied migration file** — breaks the chain. `alembic_version` (and child revisions' `down_revision`) reference a revision file that no longer exists on disk. Any Alembic command errors with "revision ... is not present". Fix: restore the file from git/backup. **Never delete a migration that's been applied to any database** — once applied, it's permanent history.
+- **Migrations on app startup vs CI** — migrations are a **deploy-time concern, not a runtime concern**.
+  - Running `alembic upgrade head` on app startup (in `lifespan`) is fine for local dev / single-instance apps.
+  - With multiple instances (e.g. 3 containers behind a load balancer), all instances run the migration concurrently on boot → **race condition** on the migration step. Alembic locks `alembic_version`, so one wins and the others error/crash-loop. Also couples slow migrations to startup — a bad migration takes down all instances at once.
+  - Safer: run migrations **once** as a dedicated CI/deploy step *before* app instances start. If it fails, the deploy halts and the old version keeps serving — no downtime.
+
+#### APIs / Tools Learned
+
+| Command | What it does |
+|---|---|
+| `alembic merge -m "..." heads` | Creates a merge revision joining multiple heads into one |
+| `alembic heads` | Reveals a branch conflict (multiple heads listed) |
+
+#### Q&A
+
+##### What causes two heads in Alembic?
+Two revisions with the same `down_revision`. Each becomes a separate tip of the chain. Alembic can't decide which is "the" head, so `upgrade head` becomes ambiguous and errors.
+
+##### How does a merge revision differ from a normal one?
+Its `down_revision` is a tuple of multiple parent revisions instead of a single string. It usually has empty upgrade/downgrade bodies — its only job is to reunite branches into one head.
+
+##### Why is running migrations on startup risky in production?
+Multiple app instances boot at once and all try to migrate concurrently — a race on the `alembic_version` lock. Losers error out and crash-loop. Migrations should run once in a dedicated deploy step before instances start.
