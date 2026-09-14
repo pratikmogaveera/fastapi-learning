@@ -32,9 +32,7 @@ class WorkerSettings:
   functions = [
     func(test_retry, max_tries=3),
     func(test_timeout, timeout=3, max_tries=1),
-    func(
-      test_unique_jobid_dedupe,
-    ),
+    func(test_unique_jobid_dedupe),
   ]
   on_startup = startup
   on_shutdown = shutdown
