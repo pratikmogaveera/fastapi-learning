@@ -54,6 +54,7 @@ fastapi-learning/
 │   ├── tasks.py            — shared job definitions (send_welcome_email)
 │   └── utils/helper.py     — ts() timestamp helper
 ├── phase-07-middleware/    — custom middleware, CORS, request logging
+│   └── main.py             — logging, X-Request-ID, CORS, X-API-Key guard middlewares
 ├── phase-08-testing/       — pytest, TestClient, async test setup
 └── phase-09-redis/         — Redis caching, rate limiting
 ```
@@ -69,7 +70,7 @@ fastapi-learning/
 - [x] Phase 5 — Authentication (JWT)
 - [x] Phase 5.5 — Alembic Deep-Dive
 - [x] Phase 6 — Background Tasks & Workers (Part A: BackgroundTasks, Part B: ARQ)
-- [ ] Phase 7 — Middleware
+- [x] Phase 7 — Middleware
 - [ ] Phase 8 — Testing
 - [ ] Phase 9 — Redis Caching & Rate Limiting (Part A: Fundamentals, Part B: Caching + Rate Limiting)
 

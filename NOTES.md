@@ -513,3 +513,60 @@ It's a coroutine that writes the job to Redis. Without `await`, you create the c
 
 ##### If the worker is down but the server is up, what happens to a `/register` request?
 The request still returns 200 immediately — the server only writes to Redis and doesn't know or care if a worker exists. The job sits in Redis until a worker starts, then gets picked up. Durability comes from the job living in Redis, not in any process's memory.
+
+
+---
+
+## 7. Middleware
+
+### Key Concepts
+
+- Middleware sits between the raw request and the route handler, and runs on **every** request regardless of route. Think onion layers: a request travels inward through each middleware to the route, and the response travels back outward through them in reverse. Each middleware acts twice — once before the route, once after.
+- `@app.middleware("http")` decorates a function `async def mw(request, call_next)`. Structure is always: code before → `response = await call_next(request)` → code after → `return response`. Forgetting `await call_next` kills the request; forgetting `return response` sends nothing back.
+- `call_next` passes control to the next layer (next middleware or the route) and returns the `Response`.
+- **Registration order is the reverse of execution order.** The middleware registered *last* is the *outermost* layer — it runs first inbound and last outbound. To get execution order A → B → C inbound, register them C, B, A. This is the single most important gotcha of the phase.
+- **`request.state`** is a per-request scratchpad. Middleware writes to it (`request.state.x = ...`), routes and inner middleware read it back. It's how middleware passes data forward. Request-scoped equivalent of `app.state`.
+- **Two ways to register:** `@app.middleware("http")` for custom function middleware; `app.add_middleware(Class, **opts)` for class-based ASGI middleware like `CORSMiddleware`. The decorator is a convenience wrapper around `BaseHTTPMiddleware`; `add_middleware` registers in-line in file execution order alongside the decorators.
+
+### Guard / short-circuit middleware
+
+- A middleware can reject a request by returning a `Response` **without** calling `call_next` — the route never runs. This short-circuits the pipeline.
+- **Critical:** inside middleware you must **return** a response object (e.g. `JSONResponse(status_code=400, content=...)`), not `raise HTTPException`. `HTTPException` is caught by FastAPI's exception handler which lives *inside* the middleware stack (routing layer). Middleware runs *outside* it, so a raised `HTTPException` bubbles up uncaught → client gets a 500, not the intended 4xx.
+- Placing the guard as an inner layer (registered early) while `logger` / `x_request_id` are outer means rejected requests still get logged and still get a request-ID header — the rejection response flows back out through the outer middlewares.
+
+### CORS
+
+- CORS is enforced by the **browser, not the server**. The server only adds `Access-Control-*` response headers; the browser reads them and decides whether to block the JS from reading the response. The request still reaches the server and the response still comes back either way.
+- **Postman ignores CORS** — you always get the body. To verify config, inspect response *headers* (`Access-Control-Allow-Origin` appears only for allowed origins) or send a manual `OPTIONS` preflight. To see actual *blocking*, use a real browser (`fetch` from a disallowed origin throws a CORS error in the console).
+- **Preflight:** for non-simple requests (e.g. `POST` with JSON), the browser first sends an `OPTIONS` request asking permission. The server answers with `Access-Control-Allow-Methods` / `-Headers`. If the method isn't listed, the browser never sends the real request.
+- **Defaults matter:** `allow_methods` defaults to `["GET"]` (NOT `"*"`), `allow_headers` defaults to `[]`. Must pass `allow_methods=["*"]`, `allow_headers=["*"]` explicitly to allow everything.
+
+### Timing
+
+- Use `time.perf_counter()` (monotonic, high-resolution) for measuring elapsed time — not `time.time()`. Convert to ms first, then round: `round((end - start) * 1000, 2)`.
+- Middleware timing measures only in-app time (from the outermost middleware inward). It's a subset of the client-observed latency (Postman's number), which includes network + uvicorn parse/serialize overhead.
+
+### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `@app.middleware("http")` | Registers a custom function-based HTTP middleware |
+| `call_next(request)` | Passes control to the next layer; returns the `Response` (must await) |
+| `app.add_middleware(Class, **opts)` | Registers class-based ASGI middleware (e.g. CORS) |
+| `request.state.x` | Per-request scratchpad for passing data middleware → route |
+| `response.headers["X-..."] = v` | Sets a response header (subscript = set once; `.append` allows dupes) |
+| `JSONResponse(status_code=, content=)` | Return directly from middleware to short-circuit (don't raise) |
+| `CORSMiddleware` | Pre-built CORS handling; from `fastapi.middleware.cors` |
+| `uuid.uuid4()` | Generates a random unique ID (per-request request ID) |
+| `time.perf_counter()` | Monotonic high-res timer for elapsed-time measurement |
+
+### Q&A
+
+##### Why does raising `HTTPException` in middleware give a 500 instead of the intended status?
+FastAPI's exception handling is wired into the routing layer, which is *inside* the middleware stack. Middleware runs outside it, so a raised `HTTPException` has no handler above it and surfaces as an unhandled 500. In middleware, return a `Response`/`JSONResponse` object directly instead.
+
+##### If middleware A is registered first and B second, which runs first inbound?
+B. The last-registered middleware is the outermost layer, so it runs first on the way in and last on the way out. Execution order is the reverse of registration order.
+
+##### Why can't Postman show a CORS block?
+CORS is a browser enforcement mechanism, not a server one. The server only emits `Access-Control-*` headers; the browser is what refuses to expose the response to JS. Postman isn't a browser, so it ignores those headers and always shows the body. Use a browser `fetch` to observe an actual block.
