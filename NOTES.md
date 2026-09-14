@@ -433,3 +433,83 @@ Its `down_revision` is a tuple of multiple parent revisions instead of a single 
 
 ##### Why is running migrations on startup risky in production?
 Multiple app instances boot at once and all try to migrate concurrently — a race on the `alembic_version` lock. Losers error out and crash-loop. Migrations should run once in a dedicated deploy step before instances start.
+
+
+---
+
+## 6. Background Tasks & Workers
+
+### Part A — FastAPI BackgroundTasks
+
+#### Key Concepts
+
+- `BackgroundTasks` is injected via the route signature (`background_tasks: BackgroundTasks`) — no `Depends()` needed. FastAPI recognises the type and provides it.
+- `background_tasks.add_task(fn, *args)` schedules a function to run **after the response is sent**. It doesn't run immediately — it's appended to a list that FastAPI drains once the response is out.
+- Tasks run in the **same process and same event loop** as the server. `async` tasks run concurrently on the loop; sync (`def`) tasks run in a thread pool so they don't block the loop.
+- Scheduling tasks does **not** block new incoming requests — the server keeps serving while background tasks run concurrently.
+- Limitations: no retries, no persistence, no observability. If the server crashes or restarts mid-task, the task dies with it. The error surfaces only in server logs and is otherwise swallowed — the client already got its response.
+- Appropriate for: cheap, fire-and-forget work where loss on crash is acceptable (e.g. best-effort logging). Not appropriate for: anything that must not be lost, anything slow or failure-prone.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `background_tasks: BackgroundTasks` | Injected param; FastAPI provides it automatically |
+| `background_tasks.add_task(fn, *args)` | Schedules `fn` to run after the response is sent |
+
+---
+
+### Part B — ARQ Workers
+
+#### Key Concepts
+
+- **ARQ** is an async job queue backed by **Redis**. It decouples job *submission* from job *execution* across separate processes.
+- Three independent pieces: **Redis** (the broker — holds the job queue), the **FastAPI server** (only enqueues jobs), and the **ARQ worker** (a separate process that polls Redis and runs jobs). Server and worker never talk directly — Redis is the middleman.
+- Every ARQ job function takes `ctx` as its **first argument** — injected by ARQ, holds worker state (redis pool, job id, try count, etc.). Forgetting it causes a signature mismatch.
+- `WorkerSettings` class declares `functions` (the registered jobs), `redis_settings`, and optional `on_startup` / `on_shutdown` hooks. Run the worker with `arq module.WorkerSettings`.
+- `create_pool(RedisSettings())` creates an `ArqRedis` pool. `await pool.enqueue_job("fn_name", *args)` enqueues a job **by string name** — the worker resolves the name against its registered functions. `enqueue_job` is a coroutine — **must be awaited**, or the job is never written to Redis.
+- Worker log symbols: `→` job started, `←` job completed (with `●`), `↻` retrying, `!` failed / max retries exceeded.
+
+##### Job Configuration (B2)
+
+- **Retries** — set per-function via `func(fn, max_tries=3)` in the `functions` list. Setting a plain attribute (`fn.max_tries = 3`) does **not** work in this ARQ version — use the `func()` wrapper. Global default is 5 (`max_tries` on `WorkerSettings`).
+- `raise Retry()` is ARQ's explicit retry signal (vs an unhandled exception, which also retries). Both count toward `max_tries`.
+- **Timeout** — `func(fn, timeout=3)` per-function, or `job_timeout` on `WorkerSettings` globally. Exceeding it raises `TimeoutError` and cancels the job. `func()` takes precedence over the global.
+- **Unique jobs / dedup** — pass `_job_id="fixed-id"` to `enqueue_job`. Enqueuing the same `_job_id` twice runs it **only once** — ARQ deduplicates. The second enqueue is silently dropped (worker shutdown summary confirms `1 job complete`, not 2).
+- **Deferred jobs** — `_defer_by=N` (run N seconds from now) or `_defer_until=datetime` (run at a specific time).
+
+##### Wiring ARQ into FastAPI (B3)
+
+- The Redis pool must live for the **whole app lifetime** — created once on startup, shared across requests, closed on shutdown. This is what `lifespan` is for.
+- `lifespan` is an `@asynccontextmanager`: code before `yield` runs once on startup, `yield` hands control to the running app, code after `yield` runs once on shutdown (Ctrl+C, SIGTERM, container stop). Same setup/`yield`/teardown shape as a `get_db` yield dependency, but scoped to the entire app instead of one request.
+- Wire it via `app = FastAPI(lifespan=lifespan)`. Store the pool on `app.state.arq_pool` during startup; routes read it back via `request.app.state.arq_pool`.
+- `lifespan` yields no value into routes (unlike `get_db`, which yields the session). `app.state` is the bridge for app-scoped shared resources.
+- **Durability difference** — with ARQ the job lives in **Redis**, a separate process. Server crashes → job survives. Worker crashes mid-job → ARQ re-queues (retries). Both down → jobs wait in Redis until a worker returns. With Part A's `BackgroundTasks` the task lived in server memory — server dies, task gone.
+- **Structure to avoid circular imports** — put job definitions in a shared `tasks.py` that both `main.py` (enqueues by name) and `worker.py` (imports the function object to register it) import. The worker process shouldn't need to construct the FastAPI app.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `RedisSettings()` | ARQ Redis connection config; defaults to `localhost:6379` |
+| `create_pool(RedisSettings())` | Creates an `ArqRedis` connection pool |
+| `await pool.enqueue_job("name", *args, **opts)` | Enqueues a job by string name; must be awaited |
+| `WorkerSettings` | Class declaring `functions`, `redis_settings`, startup/shutdown hooks |
+| `func(fn, max_tries=, timeout=)` | Wraps a job to set per-function config |
+| `Retry()` | Raise inside a job to signal an explicit retry |
+| `_job_id="..."` | Enqueue kwarg — dedupe / unique job |
+| `_defer_by=N` / `_defer_until=dt` | Enqueue kwargs — delay job execution |
+| `arq module.WorkerSettings` | CLI command to run the worker process |
+| `@asynccontextmanager` + `lifespan` | App-scoped setup/teardown; wired via `FastAPI(lifespan=...)` |
+| `app.state.x` / `request.app.state.x` | Store / read app-scoped shared resources |
+
+#### Q&A
+
+##### What's the one-sentence difference between Part A and Part B?
+Part A runs the task in the same server process after the response (fire-and-forget, lost on crash); Part B hands the job to a separate worker process via Redis (durable, retryable, observable).
+
+##### Why must `enqueue_job` be awaited?
+It's a coroutine that writes the job to Redis. Without `await`, you create the coroutine but never execute it — the job is never enqueued and Python warns "coroutine was never awaited".
+
+##### If the worker is down but the server is up, what happens to a `/register` request?
+The request still returns 200 immediately — the server only writes to Redis and doesn't know or care if a worker exists. The job sits in Redis until a worker starts, then gets picked up. Durability comes from the job living in Redis, not in any process's memory.

@@ -1,19 +1,30 @@
-import asyncio
+from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, FastAPI
+from arq import create_pool
+from arq.connections import RedisSettings
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from utils.helper import ts
 
-app = FastAPI()
+REDIS_SETTINGS = RedisSettings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+  # startup
+  print("Lifespan starting.")
+  redis = await create_pool(REDIS_SETTINGS)
+  app.state.arq_pool = redis
+  yield
+
+  # shutdown
+  print("Lifespan ending.")
+  await redis.close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Phase 6 — Background Tasks & Workers (ARQ)
-# Complete Phase 1–5 first, then come back here.
-# See PLAN.md Phase 6 for tasks.
-
-
-async def send_welcome_email(email: str):
-  await asyncio.sleep(3)
-  print(f"[{ts()}] Welcome email send succesfully to {email}")
 
 
 class RegisterUserPayload(BaseModel):
@@ -27,7 +38,7 @@ class RegisterUserResponse(BaseModel):
 
 
 @app.post("/register", response_model=RegisterUserResponse)
-async def register_user(payload: RegisterUserPayload, background_tasks: BackgroundTasks):
+async def register_user(payload: RegisterUserPayload, request: Request):
   print(f"[{ts()}] Request received.")
-  background_tasks.add_task(send_welcome_email, payload.email)
+  await request.app.state.arq_pool.enqueue_job("send_welcome_email", payload.email)
   return {"success": True, "message": "Congratulations! You have been registered successfully."}

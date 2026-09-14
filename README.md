@@ -49,6 +49,10 @@ fastapi-learning/
 ├── phase-04.5-sqlalchemy/  — SQLAlchemy deep-dive: sync → async, engine/session/pool
 ├── phase-05-auth/          — JWT auth, password hashing, protected routes
 ├── phase-06-background-tasks/ — FastAPI BackgroundTasks, ARQ worker
+│   ├── main.py             — FastAPI app: lifespan-managed ARQ pool, enqueues from route
+│   ├── worker.py           — ARQ WorkerSettings, registers job with max_tries
+│   ├── tasks.py            — shared job definitions (send_welcome_email)
+│   └── utils/helper.py     — ts() timestamp helper
 ├── phase-07-middleware/    — custom middleware, CORS, request logging
 ├── phase-08-testing/       — pytest, TestClient, async test setup
 └── phase-09-redis/         — Redis caching, rate limiting
@@ -64,7 +68,7 @@ fastapi-learning/
 - [x] Phase 4.5 — SQLAlchemy Deep-Dive (Sync → Async)
 - [x] Phase 5 — Authentication (JWT)
 - [x] Phase 5.5 — Alembic Deep-Dive
-- [ ] Phase 6 — Background Tasks & Workers (Part A: BackgroundTasks, Part B: ARQ)
+- [x] Phase 6 — Background Tasks & Workers (Part A: BackgroundTasks, Part B: ARQ)
 - [ ] Phase 7 — Middleware
 - [ ] Phase 8 — Testing
 - [ ] Phase 9 — Redis Caching & Rate Limiting (Part A: Fundamentals, Part B: Caching + Rate Limiting)
