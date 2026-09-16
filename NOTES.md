@@ -619,3 +619,39 @@ Overriding a dependency is a unit test — it isolates route logic from all exte
 
 #### Why must `app.dependency_overrides.clear()` go in `finally` and not after the assertion?
 If an assertion fails, it raises an `AssertionError` and execution stops — any code after the assertion is skipped. `finally` always runs regardless of exceptions, so it guarantees cleanup even when tests fail.
+
+
+---
+
+## 9. Redis Caching & Rate Limiting
+
+### Part A — Redis Fundamentals
+
+#### Key Concepts
+
+- Redis is an in-memory key-value store. All data lives in RAM — reads/writes are microseconds. Keys are strings; values can be strings, numbers, lists, hashes, sets, etc.
+- `decode_responses=True` on the client automatically decodes all byte responses to strings. Without it, every value comes back as `b"..."`.
+- `async with redis.Redis(...) as r` — using the client as a context manager handles connection and cleanup automatically. Right pattern for scripts. In FastAPI, create a pool once at startup via `lifespan` and share it.
+- `set(key, value)` — stores a value. `get(key)` — retrieves it. Returns `None` if key doesn't exist.
+- `delete(key)` — removes the key. `exists(key)` — returns `1` if present, `0` if not.
+- `setex(key, time, value)` — sets a value with a TTL in seconds. Equivalent to `set(key, value, ex=N)`. Key is automatically deleted when TTL expires.
+- `expire(key, time)` — sets a TTL on an existing key. If the key doesn't exist, it's a no-op.
+- `ttl(key)` — returns remaining TTL in seconds. Returns `-1` if key exists but has no TTL. Returns `-2` if key doesn't exist.
+- `incr(key)` — atomically increments an integer key by 1 and returns the new value. If the key doesn't exist, Redis treats it as 0 and returns 1. Atomic — safe under concurrent requests with no race conditions.
+- `keys(pattern)` — returns all keys matching a glob pattern. `keys("*")` returns everything. Avoid in production on large datasets — use `scan` instead. Fine for dev/debugging.
+- **`incr` return value** — `incr` already returns the new count. No need for a separate `get` call.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `redis.Redis(host, port, decode_responses=True)` | Creates a Redis client with auto string decoding |
+| `await r.set(name, value)` | Stores a key-value pair |
+| `await r.get(name)` | Retrieves a value; returns `None` if key missing |
+| `await r.delete(name)` | Deletes a key |
+| `await r.exists(name)` | Returns 1 if key exists, 0 if not |
+| `await r.setex(name, time, value)` | Set value with TTL in seconds |
+| `await r.expire(name, time)` | Set TTL on an existing key |
+| `await r.ttl(name)` | Returns remaining TTL; -1 = no TTL; -2 = key missing |
+| `await r.incr(name)` | Atomic increment; returns new value; starts at 1 if key missing |
+| `await r.keys(pattern)` | Returns all matching keys; avoid in production |
