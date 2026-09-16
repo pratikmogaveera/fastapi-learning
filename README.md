@@ -55,7 +55,10 @@ fastapi-learning/
 │   └── utils/helper.py     — ts() timestamp helper
 ├── phase-07-middleware/    — custom middleware, CORS, request logging
 │   └── main.py             — logging, X-Request-ID, CORS, X-API-Key guard middlewares
-├── phase-08-testing/       — pytest, TestClient, async test setup
+├── phase-08-testing/       — pytest, AsyncClient + ASGITransport, dependency overrides
+│   ├── main.py             — FastAPI app: POST /create-user, GET /me (protected)
+│   ├── test_main.py        — 7 tests: CRUD happy/error paths, auth, dependency override
+│   └── pytest.ini          — asyncio_mode=auto, default_fixture_loop_scope
 └── phase-09-redis/         — Redis caching, rate limiting
 ```
 
@@ -71,7 +74,7 @@ fastapi-learning/
 - [x] Phase 5.5 — Alembic Deep-Dive
 - [x] Phase 6 — Background Tasks & Workers (Part A: BackgroundTasks, Part B: ARQ)
 - [x] Phase 7 — Middleware
-- [ ] Phase 8 — Testing
+- [x] Phase 8 — Testing
 - [ ] Phase 9 — Redis Caching & Rate Limiting (Part A: Fundamentals, Part B: Caching + Rate Limiting)
 
 ## Resources

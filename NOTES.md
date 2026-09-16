@@ -570,3 +570,52 @@ B. The last-registered middleware is the outermost layer, so it runs first on th
 
 ##### Why can't Postman show a CORS block?
 CORS is a browser enforcement mechanism, not a server one. The server only emits `Access-Control-*` headers; the browser is what refuses to expose the response to JS. Postman isn't a browser, so it ignores those headers and always shows the body. Use a browser `fetch` to observe an actual block.
+
+
+---
+
+## 8. Testing
+
+### Key Concepts
+
+- `httpx.AsyncClient` is an async HTTP client — the async equivalent of `requests.get()`. Needed because FastAPI routes are async.
+- `ASGITransport(app=app)` tells `httpx` to call the ASGI app directly in-process instead of going over the network. No server needs to be running. Pass it as the `transport` argument to `AsyncClient`.
+- `base_url="http://test"` is a required placeholder — `httpx` needs a base URL to construct absolute URLs from relative paths like `/me`. The domain doesn't matter; no real DNS lookup happens.
+- `pytest` fixture (`@pytest_asyncio.fixture`) is setup/teardown logic that runs before and after each test. Declare a parameter with the same name as a fixture and pytest injects it automatically — no explicit call needed.
+- `yield` inside a fixture splits it into setup (before yield) and teardown (after yield). Code after `yield` always runs, even if the test fails — this is the teardown guarantee.
+- `await client.aclose()` after `yield` in the fixture closes the `AsyncClient` and releases connections. Without it, open connections leak.
+- `pytest-asyncio` with `asyncio_mode = "auto"` (in `pytest.ini`) allows `async def test_*` functions to run without any extra decorator. Without it, pytest sees a coroutine object and does nothing.
+- `asyncio_default_fixture_loop_scope = "function"` in `pytest.ini` silences the deprecation warning — sets explicit per-test event loop scope.
+- `json=` in `client.post()` sends a JSON body with `Content-Type: application/json`. `data=` sends form-encoded data — wrong for Pydantic route bodies.
+- `app.dependency_overrides` is a dict on the `app` object. Map `original_dep → fake_dep` to swap any `Depends()` globally for all requests through that app instance. Used to replace real DB sessions, auth checks, or any other dependency in tests.
+- `app.dependency_overrides.clear()` removes all overrides — must be called after the test so overrides don't bleed into other tests.
+- `try/finally` is the clean pattern for cleanup in a test: assertions go in `try`, `app.dependency_overrides.clear()` goes in `finally`. `finally` runs regardless of whether an assertion raised — unlike code placed after the assert.
+- Pydantic v2 is strict about type coercion — `{"name": 1}` (int) returns 422 rather than coercing to `"1"`. Behaviour differs from v1.
+
+### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `AsyncClient(transport=, base_url=)` | Async HTTP client; `transport` controls how requests are sent |
+| `ASGITransport(app=app)` | Routes `httpx` requests directly to the ASGI app — no network |
+| `@pytest_asyncio.fixture` | Marks an async function as a pytest fixture |
+| `yield` in a fixture | Sends the value to the test; code after yield is teardown |
+| `await client.aclose()` | Closes the `AsyncClient` and releases connections |
+| `client.post(url, json=)` | POST with JSON body |
+| `client.get(url, headers=)` | GET with custom headers |
+| `response.status_code` | HTTP status code of the response |
+| `response.json()` | Parsed response body as a Python dict |
+| `app.dependency_overrides[dep] = fake` | Swaps a dependency globally for all test requests |
+| `app.dependency_overrides.clear()` | Removes all overrides — must be called after test |
+| `asyncio_mode = "auto"` | `pytest.ini` setting to auto-run async test functions |
+
+### Q&A
+
+#### What does `ASGITransport` do that a normal `httpx.Client` can't?
+`httpx.Client` sends requests over TCP to a real server. `ASGITransport` bypasses the network entirely and calls the ASGI app directly in-process. No port, no server process needed — the test runs against the app object itself.
+
+#### What's the difference between overriding a dependency and using a test DB?
+Overriding a dependency is a unit test — it isolates route logic from all external systems. A test DB is an integration test — it tests the full stack including real DB behavior. Both are valid; dependency overrides are faster, isolated, and have no side effects. Neither approach is about project size.
+
+#### Why must `app.dependency_overrides.clear()` go in `finally` and not after the assertion?
+If an assertion fails, it raises an `AssertionError` and execution stops — any code after the assertion is skipped. `finally` always runs regardless of exceptions, so it guarantees cleanup even when tests fail.
