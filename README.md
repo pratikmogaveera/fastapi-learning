@@ -60,6 +60,8 @@ fastapi-learning/
 │   ├── test_main.py        — 7 tests: CRUD happy/error paths, auth, dependency override
 │   └── pytest.ini          — asyncio_mode=auto, default_fixture_loop_scope
 └── phase-09-redis/         — Redis caching, rate limiting
+    ├── part_a.py           — standalone script: set/get/delete/TTL/incr/keys
+    └── part_b.py           — FastAPI app: cache-aside on GET /users/{id}, rate limiter as Depends()
 ```
 
 ## Progress
@@ -75,7 +77,7 @@ fastapi-learning/
 - [x] Phase 6 — Background Tasks & Workers (Part A: BackgroundTasks, Part B: ARQ)
 - [x] Phase 7 — Middleware
 - [x] Phase 8 — Testing
-- [ ] Phase 9 — Redis Caching & Rate Limiting (Part A: Fundamentals, Part B: Caching + Rate Limiting)
+- [x] Phase 9 — Redis Caching & Rate Limiting (Part A: Fundamentals, Part B: Caching + Rate Limiting)
 
 ## Resources
 

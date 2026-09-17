@@ -655,3 +655,44 @@ If an assertion fails, it raises an `AssertionError` and execution stops — any
 | `await r.ttl(name)` | Returns remaining TTL; -1 = no TTL; -2 = key missing |
 | `await r.incr(name)` | Atomic increment; returns new value; starts at 1 if key missing |
 | `await r.keys(pattern)` | Returns all matching keys; avoid in production |
+
+
+### Part B — Caching & Rate Limiting in FastAPI
+
+#### Key Concepts
+
+- Redis pool is created once in `lifespan` and stored on `app.state.redis`. Routes access it via a `get_redis()` dependency that returns `app.state.redis`. No `yield` needed — the pool is app-scoped and has no per-request teardown.
+- **Cache-aside pattern:** check Redis first → hit: return cached value. Miss: query DB, serialize to JSON string, store in Redis with TTL, return DB result. Cache key should be namespaced: `"user:{user_id}"` not just `"{user_id}"` — prevents collisions with other keys.
+- Pydantic models must be serialized before storing in Redis — use `json.dumps({"field": value})`. On retrieval, `json.loads(cached_string)` gives back a dict that FastAPI serializes via `response_model`.
+- **Rate limiting with `incr` + `expire`:** `incr` the key on every request. If count == 1 (first hit), set TTL. If count > threshold, return 429. The TTL is only set on count == 1 — setting it every time would reset the window on each request, making the limiter ineffective.
+- Rate limit key format: `"rate_limit:{client_ip}"` — namespaced to avoid collisions. IP comes from `request.client.host`.
+- **Nested dependencies:** a dependency can itself declare `Depends()` parameters. FastAPI resolves the full graph. `rate_limiting_dep` depends on `get_redis` — FastAPI calls `get_redis` once and injects it into both `rate_limiting_dep` and the route handler. Duplicate `Depends(get_redis)` calls within the same request are deduplicated by FastAPI.
+- **Middleware vs Depends() for rate limiting:** middleware is global — applies to every route, no opt-out. `Depends()` is per-route — explicitly opted in. Use middleware for truly global concerns; use `Depends()` when only specific routes need rate limiting.
+- **Edge case:** if the server crashes between `incr` and `expire` on the first request, the key has no TTL and stays in Redis forever — blocking all future requests from that IP permanently. Atomic alternative: `set(key, 1, ex=10, nx=True)` — sets the key with TTL only if it doesn't exist, in a single atomic operation.
+- `return` vs `yield` in a dependency: use `yield` only when teardown is needed (e.g. closing a DB session). Use `return` for simple value-returning dependencies like `get_redis()`.
+
+#### APIs / Tools Learned
+
+| API / Tool | What it does |
+|---|---|
+| `app.state.redis` | App-scoped storage for the Redis pool |
+| `async def get_redis()` | Dependency that returns the shared Redis client |
+| `Depends(get_redis)` inside another dep | Nested dependency — FastAPI resolves and deduplicates |
+| `r.get(f"user:{id}")` | Namespaced cache lookup |
+| `r.setex(name, time, value)` | Store with TTL — used for cache population |
+| `json.dumps / json.loads` | Serialize Pydantic model → string for Redis storage |
+| `request.client.host` | Client IP address for rate limit key |
+| `r.incr(f"rate_limit:{ip}")` | Atomic counter increment; returns new count |
+| `r.expire(name, time)` | Set TTL on existing key — called only on first hit |
+| `set(key, 1, ex=N, nx=True)` | Atomic alternative to incr+expire — avoids crash edge case |
+
+#### Q&A
+
+##### Why is the rate limit TTL only set when count == 1?
+Setting `expire` on every request would reset the 10-second window each time — the counter would never expire and the rate limit would never trigger correctly. Setting it only on the first hit starts the fixed window once and lets it drain naturally.
+
+##### Why does FastAPI deduplicate `Depends(get_redis)` across nested dependencies?
+FastAPI caches dependency results within a single request. If two dependencies both declare `Depends(get_redis)`, FastAPI calls `get_redis` once, caches the result, and injects the same instance into both. This avoids redundant work and ensures shared state (the same Redis client) within a request.
+
+##### What's the difference between middleware and Depends() for rate limiting?
+Middleware is global — it intercepts every request regardless of route. `Depends()` is per-route — you explicitly add it to routes that need it. Middleware is better for truly global policies; `Depends()` is better when only specific routes need rate limiting.
