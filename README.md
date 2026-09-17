@@ -13,7 +13,7 @@ Learn FastAPI concepts hands-on through small, focused exercises. Each phase map
 - **Package manager:** uv
 - **DB:** PostgreSQL (via SQLAlchemy async)
 - **Cache:** Redis
-- **Testing:** pytest + httpx (TestClient)
+- **Testing:** pytest + httpx (AsyncClient + ASGITransport)
 - **Server:** Uvicorn
 
 ## How to Run
@@ -87,3 +87,4 @@ fastapi-learning/
 - [Alembic Docs](https://alembic.sqlalchemy.org/en/latest/)
 - [ARQ Docs](https://arq-docs.helpmanual.io/)
 - [pytest-asyncio](https://pytest-asyncio.readthedocs.io/)
+- [redis-py Docs](https://redis-py.readthedocs.io/)
