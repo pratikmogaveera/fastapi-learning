@@ -29,12 +29,6 @@ Concepts, Q&A, and key takeaways. Append after completing each phase. Don't reor
 
 ---
 
-## Q&A
-
-_Add questions and answers as they come up during learning._
-
----
-
 ## 2. Pydantic Models & Validation
 
 ### Key Concepts
